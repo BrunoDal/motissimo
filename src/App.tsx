@@ -46,6 +46,7 @@ export default function App() {
   const [cluesShown, setCluesShown] = useState(1);
   const [hintPenalty, setHintPenalty] = useState(0);
   const [lastScore, setLastScore] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const runRef = useRef(run);
   const feedbackRef = useRef(feedback);
 
@@ -135,6 +136,30 @@ export default function App() {
   }, [screen]);
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    let baselineHeight = viewport?.height ?? window.innerHeight;
+    let timer = 0;
+    const isTextInput = (element: Element | null) => element instanceof HTMLInputElement && !['checkbox','radio','button','submit'].includes(element.type);
+    const updateKeyboard = () => {
+      const activeInput = isTextInput(document.activeElement);
+      const currentHeight = viewport?.height ?? window.innerHeight;
+      if (!activeInput) baselineHeight = Math.max(baselineHeight, currentHeight);
+      const visiblyReduced = currentHeight < baselineHeight * .82;
+      setKeyboardOpen(screen === 'game' && activeInput && (visiblyReduced || !viewport));
+    };
+    const onFocus = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 180); };
+    const onBlur = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 80); };
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('focusout', onBlur);
+    viewport?.addEventListener('resize', updateKeyboard);
+    window.addEventListener('orientationchange', onBlur);
+    return () => {
+      window.clearTimeout(timer); document.removeEventListener('focusin', onFocus); document.removeEventListener('focusout', onBlur);
+      viewport?.removeEventListener('resize', updateKeyboard); window.removeEventListener('orientationchange', onBlur);
+    };
+  }, [screen]);
+
+  useEffect(() => {
     if (!run) return;
     setRun(old => old && old.current.id === run.current.id ? { ...old, draftText: answer, draftOrder: ordered, draftGuesses: wordleGuesses, draftCluesShown: cluesShown, draftHintPenalty: hintPenalty } : old);
   }, [answer, ordered, wordleGuesses, cluesShown, hintPenalty, run?.current.id]);
@@ -175,7 +200,7 @@ export default function App() {
   const progress = run ? Math.max(0, Math.min(100, run.remainingMs / totalTime * 100)) : 0;
   const record = Math.max(stats.bestScore, run?.score ?? 0);
   const accuracy = stats.totalQuestions ? Math.round(stats.totalCorrect / stats.totalQuestions * 100) : 0;
-  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : ''].join(' ');
+  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : '', keyboardOpen ? 'keyboard-open' : ''].join(' ');
 
   const gameCard = useMemo(() => {
     if (!run) return null;
@@ -194,7 +219,9 @@ export default function App() {
             const completed = wordleGuesses[rowIndex];
             const displayed = completed ?? (rowIndex===wordleGuesses.length ? normalizeText(answer) : '');
             const marks = completed ? evaluateWordleGuess(completed, challenge.answer) : [];
-            return <div className={`wordle-row ${completed?'revealed':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=><span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??''}</span>)}</div>;
+            const active = rowIndex === wordleGuesses.length;
+            const hideForKeyboard = keyboardOpen && !!completed && rowIndex < wordleGuesses.length - 2;
+            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''} ${hideForKeyboard?'keyboard-hidden':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=><span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??''}</span>)}</div>;
           })}
         </div>
         <label className="sr-only" htmlFor="wordle-answer">Propose un mot de {targetLength} lettres</label>
@@ -206,7 +233,7 @@ export default function App() {
     return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>+ Voir un indice <small>−35 pts</small></button>}</div>}<label className="sr-only" htmlFor="answer">Ta réponse</label><input id="answer" autoFocus autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Ta réponse…" disabled={!!feedback}/><button className="primary full" disabled={!answer.trim() || !!feedback}>Valider</button></form>;
   // Dependencies intentionally include transient answer state used by all game renderers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback]);
+  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, keyboardOpen]);
 
   return <div className={`app ${appClass}`}>
     {screen === 'home' && <main className="home screen">
