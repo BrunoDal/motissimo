@@ -3,14 +3,21 @@ import type { CSSProperties } from 'react';
 import { frenchChallenges } from './content';
 import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
-import type { Challenge, Preferences, RunState, Stats } from './types';
+import type { Challenge, GameMode, GameType, Preferences, RunState, Stats } from './types';
 
-type Screen = 'home' | 'game' | 'pause' | 'gameover' | 'rules' | 'settings';
+type Screen = 'home' | 'game' | 'pause' | 'gameover' | 'rules' | 'settings' | 'modes';
 type Feedback = { correct: boolean; points: number; message: string } | null;
 
-const gameLabels: Record<Challenge['type'], string> = {
+const gameLabels: Record<GameType, string> = {
   mcq: 'QCM express', boolean: 'Vrai ou faux', odd: 'L’intrus', order: 'Remets dans l’ordre',
   anagram: 'Anagramme', missing: 'Mot à trous', clues: 'Trois indices', wordle: 'Mot mystère'
+};
+
+const gameIcons: Record<GameType, string> = { mcq:'?', boolean:'✓', odd:'◈', order:'↕', anagram:'A', missing:'…', clues:'3', wordle:'W' };
+const modeDescriptions: Record<GameType, string> = {
+  mcq:'Quatre réponses, une seule juste', boolean:'Décide si l’affirmation est vraie', odd:'Repère l’élément qui ne va pas',
+  order:'Replace les événements dans le temps', anagram:'Remets les lettres dans l’ordre', missing:'Complète les lettres absentes',
+  clues:'Trouve le mot avec trois indices', wordle:'Trouve le mot mystère en six essais'
 };
 
 function formatScore(score: number) { return new Intl.NumberFormat('fr-FR').format(score); }
@@ -67,10 +74,11 @@ export default function App() {
   }, []);
 
   const startNew = useCallback(() => {
-    const current = pickChallenge(frenchChallenges, 1, []);
-    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.id], bonusRound: false, startedAt: Date.now() };
+    const onlyType = prefs.gameMode === 'mix' ? undefined : prefs.gameMode;
+    const current = pickChallenge(frenchChallenges, 1, [], undefined, false, onlyType);
+    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.sourceId ?? current.id], bonusRound: false, startedAt: Date.now(), mode:prefs.gameMode };
     setRun(next); prepareChallenge(current); setScreen('game');
-  }, [prepareChallenge]);
+  }, [prepareChallenge, prefs.gameMode]);
 
   const resume = useCallback(() => {
     if (!run) return;
@@ -87,8 +95,9 @@ export default function App() {
     if (!wasCorrect && state.lives <= 0) { finishGame(state.score); return; }
     const shouldBonus = wasCorrect && state.combo > 0 && state.combo % 25 === 0 && state.lives < 3;
     const level = getLevel(state.successes);
-    const current = pickChallenge(frenchChallenges, level, state.recentIds, state.current.type, shouldBonus);
-    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
+    const onlyType = state.mode === 'mix' ? undefined : state.mode;
+    const current = pickChallenge(frenchChallenges, level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType);
+    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
     prepareChallenge(current); setRun(next);
   }, [finishGame, prepareChallenge]);
 
@@ -194,6 +203,7 @@ export default function App() {
     if (!/^[a-z]+$/.test(guess) || guess.length !== target.length) {
       setWordleError(`Entre un mot de ${target.length} lettres.`); return;
     }
+    if (guess[0] !== target[0]) { setWordleError(`Le mot doit commencer par ${target[0].toLocaleUpperCase('fr-FR')}.`); return; }
     if (wordleGuesses.includes(guess)) { setWordleError('Ce mot a déjà été proposé.'); return; }
     const nextGuesses = [...wordleGuesses, guess];
     setWordleGuesses(nextGuesses); setAnswer('');
@@ -224,7 +234,9 @@ export default function App() {
     }
     if (challenge.type === 'wordle') {
       const targetLength = normalizeText(challenge.answer).length;
+      const firstLetter = normalizeText(challenge.answer)[0].toLocaleUpperCase('fr-FR');
       return <form className="wordle-game" onSubmit={submitWordle}>
+        <div className="wordle-first-letter"><span>{firstLetter}</span> Première lettre offerte</div>
         <div className="wordle-board" aria-label={`${wordleGuesses.length} essai${wordleGuesses.length>1?'s':''} sur ${challenge.maxAttempts}`}>
           {Array.from({length:challenge.maxAttempts},(_,rowIndex)=>{
             const completed = wordleGuesses[rowIndex];
@@ -232,11 +244,11 @@ export default function App() {
             const marks = completed ? evaluateWordleGuess(completed, challenge.answer) : [];
             const active = rowIndex === wordleGuesses.length;
             const hideForKeyboard = keyboardOpen && !!completed && rowIndex < wordleGuesses.length - 2;
-            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''} ${hideForKeyboard?'keyboard-hidden':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=><span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??''}</span>)}</div>;
+            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''} ${hideForKeyboard?'keyboard-hidden':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=>{const given=!completed&&letterIndex===0&&!displayed[0];const letter=displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??(given?firstLetter:'');return <span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':given?'given':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{letter}</span>;})}</div>;
           })}
         </div>
         <label className="sr-only" htmlFor="wordle-answer">Propose un mot de {targetLength} lettres</label>
-        <input id="wordle-answer" autoFocus autoComplete="off" autoCapitalize="characters" maxLength={targetLength} value={answer} onChange={e=>{setAnswer(e.target.value);setWordleError('');}} placeholder={`${targetLength} lettres…`} disabled={!!feedback}/>
+        <input id="wordle-answer" autoFocus autoComplete="off" autoCapitalize="characters" maxLength={targetLength} value={answer} onChange={e=>{setAnswer(e.target.value);setWordleError('');}} placeholder={`${firstLetter} + ${targetLength-1} lettres…`} disabled={!!feedback}/>
         <div className="wordle-help" aria-live="polite">{wordleError||'Vert : bien placée · Jaune : présente'}</div>
         <button className="primary full" disabled={normalizeText(answer).length!==targetLength || !!feedback}>Essayer</button>
       </form>;
@@ -251,6 +263,7 @@ export default function App() {
       <div className="home-top"><div className="brand-mark">M</div><button className="icon-button" onClick={()=>setScreen('settings')} aria-label="Réglages">⚙</button></div>
       <section className="hero"><span className="eyebrow">QUIZ · MOTS · RECORDS</span><h1>Motissimo</h1><p>Joue avec ta tête.<br/>Va toujours plus loin.</p><div className="hero-orbit orbit-one">?</div><div className="hero-orbit orbit-two">A</div></section>
       <section className="home-actions">
+        <button className="mode-picker" onClick={()=>setScreen('modes')}><span>{prefs.gameMode==='mix'?'✦':gameIcons[prefs.gameMode]}</span><div><small>MODE DE JEU</small><b>{prefs.gameMode==='mix'?'Mix infini':gameLabels[prefs.gameMode]}</b></div><i>Changer ›</i></button>
         {run ? <><button className="primary huge" onClick={resume}>▶ Reprendre <small>{formatScore(run.score)} pts · {run.lives} vie{run.lives>1?'s':''}</small></button><button className="secondary" onClick={startNew}>Nouvelle partie</button></> : <button className="primary huge" onClick={startNew}>▶ Jouer <small>3 vies · défi sans fin</small></button>}
       </section>
       <section className="stats-grid"><div><span>🏆</span><b>{formatScore(record)}</b><small>Meilleur score</small></div><div><span>🔥</span><b>{stats.longestCombo}</b><small>Meilleur combo</small></div><div><span>🎯</span><b>{accuracy}%</b><small>Précision</small></div></section>
@@ -274,6 +287,7 @@ export default function App() {
     {screen === 'rules' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>Comment jouer ?</h1></header><div className="rule"><b>1</b><div><h2>Enchaîne les défis</h2><p>Huit mini-jeux alternent culture générale et jeux de mots.</p></div></div><div className="rule"><b>2</b><div><h2>Protège tes vies</h2><p>Tu commences avec trois cœurs. Une erreur ou un chrono écoulé en coûte un.</p></div></div><div className="rule"><b>3</b><div><h2>Fais monter le combo</h2><p>Les séries de bonnes réponses multiplient tes points jusqu’à ×3.</p></div></div><div className="rule"><b>4</b><div><h2>Décroche une vie bonus</h2><p>Après 25 bonnes réponses consécutives, réussis le défi bonus pour récupérer un cœur.</p></div></div><div className="offline-note">☁︎ <strong>100 % hors ligne</strong><br/><span>Après la première visite, Motissimo fonctionne sans connexion.</span></div></main>}
 
     {screen === 'settings' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>Réglages</h1></header><SettingsRow icon="♪" title="Sons" detail="Effets de réussite et d’erreur" checked={prefs.sound} onChange={sound=>setPrefs(p=>({...p,sound}))}/><SettingsRow icon="⌁" title="Vibrations" detail="Retour tactile pendant la partie" checked={prefs.vibration} onChange={vibration=>setPrefs(p=>({...p,vibration}))}/><SettingsRow icon="◌" title="Réduire les animations" detail="Limite les mouvements visuels" checked={prefs.reducedMotion} onChange={reducedMotion=>setPrefs(p=>({...p,reducedMotion}))}/><SettingsRow icon="◐" title="Contraste renforcé" detail="Améliore la distinction des éléments" checked={prefs.highContrast} onChange={highContrast=>setPrefs(p=>({...p,highContrast}))}/><div className="offline-note">Les réglages, statistiques et records restent uniquement sur cet appareil.</div></main>}
+    {screen === 'modes' && <main className="info-screen modes-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><div><span className="eyebrow">TA PARTIE, TES RÈGLES</span><h1>Choisis ton mode</h1></div></header><button className={`mode-card mix-mode ${prefs.gameMode==='mix'?'selected':''}`} onClick={()=>{setPrefs(p=>({...p,gameMode:'mix'}));setScreen('home');}}><span>✦</span><div><b>Mix infini</b><small>Les huit mini-jeux s’enchaînent</small></div><i>{prefs.gameMode==='mix'?'✓':'›'}</i></button><div className="mode-list">{(Object.keys(gameLabels) as GameType[]).map(type=><button className={`mode-card ${prefs.gameMode===type?'selected':''}`} key={type} onClick={()=>{setPrefs(p=>({...p,gameMode:type as GameMode}));setScreen('home');}}><span>{gameIcons[type]}</span><div><b>{gameLabels[type]}</b><small>{modeDescriptions[type]}</small></div><i>{prefs.gameMode===type?'✓':'›'}</i></button>)}</div></main>}
   </div>;
 }
 

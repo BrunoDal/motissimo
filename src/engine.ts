@@ -1,4 +1,4 @@
-import type { Challenge, MiniGameEngine } from './types';
+import type { Challenge, GameType, MiniGameEngine } from './types';
 
 export function normalizeText(value: string): string {
   return value
@@ -54,12 +54,14 @@ export function calculatePoints(level: number, remainingMs: number, totalMs: num
   return Math.round((base + speed) * multiplier * (bonusRound ? 1.5 : 1));
 }
 
-export function pickChallenge(all: Challenge[], level: number, recentIds: string[], previousType?: Challenge['type'], bonus = false): Challenge {
+export function pickChallenge(all: Challenge[], level: number, recentIds: string[], previousType?: Challenge['type'], bonus = false, onlyType?: GameType): Challenge {
   const targetDifficulty = Math.min(5, bonus ? Math.max(3, level) : Math.max(1, Math.ceil(level / 2)));
-  let pool = all.filter(item => !recentIds.includes(item.id) && item.difficulty <= targetDifficulty && (!previousType || item.type !== previousType));
+  const modePool = onlyType ? all.filter(item => item.type === onlyType) : all;
+  let pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id) && item.difficulty <= targetDifficulty && (!previousType || item.type !== previousType));
   if (bonus) pool = pool.filter(item => item.difficulty >= Math.min(3, targetDifficulty));
-  if (!pool.length) pool = all.filter(item => !recentIds.includes(item.id));
-  if (!pool.length) pool = all;
+  if (!pool.length) pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id) && item.difficulty <= targetDifficulty);
+  if (!pool.length) pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id));
+  if (!pool.length) pool = modePool;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 

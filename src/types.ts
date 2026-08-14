@@ -1,4 +1,5 @@
 export type GameType = 'mcq' | 'boolean' | 'odd' | 'order' | 'anagram' | 'missing' | 'clues' | 'wordle';
+export type GameMode = 'mix' | GameType;
 
 export interface BaseChallenge {
   id: string;
@@ -7,6 +8,7 @@ export interface BaseChallenge {
   difficulty: number;
   prompt: string;
   explanation?: string;
+  sourceId?: string;
 }
 
 export interface ChoiceChallenge extends BaseChallenge {
@@ -58,6 +60,7 @@ export interface RunState {
   recentIds: string[];
   bonusRound: boolean;
   startedAt: number;
+  mode: GameMode;
   draftText?: string;
   draftOrder?: string[];
   draftGuesses?: string[];
@@ -78,4 +81,5 @@ export interface Preferences {
   vibration: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
+  gameMode: GameMode;
 }

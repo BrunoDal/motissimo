@@ -1,6 +1,8 @@
 # Motissimo
 
-PWA mobile de culture générale et jeux de mots, jouable entièrement hors ligne après la première visite.
+PWA mobile de culture générale et jeux de mots, jouable entièrement hors ligne après la première visite. Elle propose exactement 10 000 manches, un mode mixte et huit modes dédiés à un seul mini-jeu.
+
+La méthode de vérification éditoriale et les références sont détaillées dans [CONTENT_AUDIT.md](CONTENT_AUDIT.md).
 
 ## Développement local
 

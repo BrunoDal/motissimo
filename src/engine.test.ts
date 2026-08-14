@@ -3,9 +3,9 @@ import { buildFrenchChallenges } from './content';
 import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, validateChallenge } from './engine';
 
 describe('moteur Motissimo', () => {
-  it('fournit environ mille défis dans les huit formats', () => {
+  it('fournit exactement dix mille défis dans les huit formats', () => {
     const challenges = buildFrenchChallenges();
-    expect(challenges.length).toBeGreaterThanOrEqual(950);
+    expect(challenges.length).toBe(10_000);
     expect(new Set(challenges.map(c => c.type)).size).toBe(8);
     expect(new Set(challenges.map(c => c.id)).size).toBe(challenges.length);
     expect(challenges.filter(c => c.type === 'wordle').length).toBeGreaterThan(100);
