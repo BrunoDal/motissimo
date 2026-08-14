@@ -192,13 +192,14 @@ export default function App() {
       <button className="text-button" onClick={()=>setScreen('rules')}>Comment jouer ?</button>
     </main>}
 
-    {screen === 'game' && run && <main className="game screen">
-      <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className="score"><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={i<run.lives?'alive':''}>♥</span>)}</div></header>
+    {screen === 'game' && run && <main className={`game screen ${feedback?.correct?'answer-correct':feedback?'answer-wrong':''}`}>
+      <div className="game-atmosphere" aria-hidden="true"><i/><i/><i/><i/><i/></div>
+      <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
       <div className="timer-track"><div style={{width:`${progress}%`}} className={progress<25?'danger':''}/></div>
-      <section className="game-meta"><span>Niveau {level}</span><b>{run.bonusRound?'★ Défi vie bonus':gameLabels[run.current.type]}</b><span>🔥 {run.combo}</span></section>
-      <section className="challenge-card"><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2>{gameCard}</section>
+      <section className="game-meta"><span>Niveau {level}</span><b>{run.bonusRound?'★ Défi vie bonus':gameLabels[run.current.type]}</b><span className={run.combo>0?'combo-live':''}>🔥 {run.combo}</span></section>
+      <section className="challenge-card" key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2>{gameCard}</section>
       <footer className="game-footer"><span>Record {formatScore(record)}</span><span>{Math.ceil(run.remainingMs/1000)} s</span></footer>
-      {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status"><div>{feedback.correct?'✓':'×'}</div><h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points)} points</strong>:<p>{run.current.explanation}</p>}</div>}
+      {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status" aria-live="assertive"><div className="feedback-symbol">{feedback.correct?'✓':'×'}</div>{!feedback.correct && <div className="life-loss"><span>♥</span><b>−1 VIE</b><i/><i/><i/></div>}<h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points)} points</strong>:<p>{run.current.explanation}</p>}</div>}
     </main>}
 
     {screen === 'pause' && run && <main className="modal-screen screen"><div className="modal-icon">Ⅱ</div><h1>En pause</h1><p>Ton chrono est arrêté.<br/>Ta partie est sauvegardée.</p><button className="primary huge" onClick={resume}>Continuer</button><button className="secondary" onClick={()=>setScreen('home')}>Retour à l’accueil</button></main>}
