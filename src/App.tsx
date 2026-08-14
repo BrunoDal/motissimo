@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { frenchChallenges } from './content';
 import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
@@ -47,6 +48,7 @@ export default function App() {
   const [hintPenalty, setHintPenalty] = useState(0);
   const [lastScore, setLastScore] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [visibleHeight, setVisibleHeight] = useState(() => window.visualViewport?.height ?? window.innerHeight);
   const runRef = useRef(run);
   const feedbackRef = useRef(feedback);
 
@@ -139,23 +141,31 @@ export default function App() {
     const viewport = window.visualViewport;
     let baselineHeight = viewport?.height ?? window.innerHeight;
     let timer = 0;
-    const isTextInput = (element: Element | null) => element instanceof HTMLInputElement && !['checkbox','radio','button','submit'].includes(element.type);
+    const isEditable = (element: Element | null) =>
+      (element instanceof HTMLInputElement && !['checkbox','radio','button','submit'].includes(element.type)) ||
+      element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement ||
+      (element instanceof HTMLElement && element.isContentEditable);
     const updateKeyboard = () => {
-      const activeInput = isTextInput(document.activeElement);
+      const activeElement = document.activeElement;
+      const activeInput = isEditable(activeElement);
       const currentHeight = viewport?.height ?? window.innerHeight;
+      setVisibleHeight(Math.round(currentHeight));
       if (!activeInput) baselineHeight = Math.max(baselineHeight, currentHeight);
       const visiblyReduced = currentHeight < baselineHeight * .82;
       setKeyboardOpen(screen === 'game' && activeInput && (visiblyReduced || !viewport));
+      if (activeInput && visiblyReduced) window.requestAnimationFrame(() => activeElement?.scrollIntoView({ block:'nearest', inline:'nearest' }));
     };
     const onFocus = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 180); };
     const onBlur = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 80); };
     document.addEventListener('focusin', onFocus);
     document.addEventListener('focusout', onBlur);
     viewport?.addEventListener('resize', updateKeyboard);
-    window.addEventListener('orientationchange', onBlur);
+    const onOrientation = () => window.setTimeout(() => { baselineHeight = viewport?.height ?? window.innerHeight; updateKeyboard(); }, 250);
+    window.addEventListener('orientationchange', onOrientation);
+    updateKeyboard();
     return () => {
       window.clearTimeout(timer); document.removeEventListener('focusin', onFocus); document.removeEventListener('focusout', onBlur);
-      viewport?.removeEventListener('resize', updateKeyboard); window.removeEventListener('orientationchange', onBlur);
+      viewport?.removeEventListener('resize', updateKeyboard); window.removeEventListener('orientationchange', onOrientation);
     };
   }, [screen]);
 
@@ -201,6 +211,7 @@ export default function App() {
   const record = Math.max(stats.bestScore, run?.score ?? 0);
   const accuracy = stats.totalQuestions ? Math.round(stats.totalCorrect / stats.totalQuestions * 100) : 0;
   const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : '', keyboardOpen ? 'keyboard-open' : ''].join(' ');
+  const appStyle = { '--visible-height': `${visibleHeight}px` } as CSSProperties;
 
   const gameCard = useMemo(() => {
     if (!run) return null;
@@ -235,7 +246,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, keyboardOpen]);
 
-  return <div className={`app ${appClass}`}>
+  return <div className={`app ${appClass}`} style={appStyle} data-keyboard-open={keyboardOpen}>
     {screen === 'home' && <main className="home screen">
       <div className="home-top"><div className="brand-mark">M</div><button className="icon-button" onClick={()=>setScreen('settings')} aria-label="Réglages">⚙</button></div>
       <section className="hero"><span className="eyebrow">QUIZ · MOTS · RECORDS</span><h1>Motissimo</h1><p>Joue avec ta tête.<br/>Va toujours plus loin.</p><div className="hero-orbit orbit-one">?</div><div className="hero-orbit orbit-two">A</div></section>
@@ -251,7 +262,7 @@ export default function App() {
       <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
       <div className="timer-track"><div style={{width:`${progress}%`}} className={progress<25?'danger':''}/></div>
       <section className="game-meta"><span>Niveau {level}</span><b>{run.bonusRound?'★ Défi vie bonus':gameLabels[run.current.type]}</b><span className={run.combo>0?'combo-live':''}>🔥 {run.combo}</span></section>
-      <section className={`challenge-card challenge-${run.current.type}`} key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2>{gameCard}</section>
+      <section className={`challenge-card challenge-${run.current.type}`} data-game-type={run.current.type} key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2><div className="challenge-body">{gameCard}</div></section>
       <footer className="game-footer"><span>Record {formatScore(record)}</span><span>{Math.ceil(run.remainingMs/1000)} s</span></footer>
       {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status" aria-live="assertive"><div className="feedback-symbol">{feedback.correct?'✓':'×'}</div>{!feedback.correct && <div className="life-loss"><span>♥</span><b>−1 VIE</b><i/><i/><i/></div>}<h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points)} points</strong>:<p>{run.current.explanation}</p>}</div>}
     </main>}
