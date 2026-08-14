@@ -195,6 +195,37 @@ export const words: WordEntry[] = [
   ["calligraphie","Art de former de beaux caractères d’écriture","J’accorde soin et style aux lettres","J’utilise souvent plume et encre",2]
 ];
 
+export const wordleWords: Array<[word: string, definition: string, difficulty: number]> = [
+  ["arbre","Grande plante ligneuse possédant un tronc",1],["avion","Appareil volant muni d’ailes",1],
+  ["bague","Bijou porté autour d’un doigt",1],["boule","Objet de forme sphérique",1],
+  ["brume","Brouillard léger",1],["cadre","Bordure entourant une image",1],
+  ["carte","Représentation d’un territoire ou petit carton",1],["chair","Partie molle du corps ou d’un fruit",2],
+  ["chant","Suite de sons produits par la voix",1],["choix","Action de sélectionner entre plusieurs possibilités",1],
+  ["coeur","Organe qui fait circuler le sang",1],["danse","Art de mouvoir le corps en rythme",1],
+  ["droit","Qui n’est pas courbé, ou ensemble de règles",2],["école","Lieu consacré à l’enseignement",1],
+  ["fleur","Partie colorée de nombreuses plantes",1],["fruit","Produit comestible issu d’une fleur",1],
+  ["glace","Eau solidifiée ou dessert très froid",1],["habit","Vêtement",1],
+  ["image","Représentation visuelle",1],["jaune","Couleur du citron mûr",1],
+  ["livre","Ouvrage composé de pages",1],["magie","Art de produire des effets inexplicables",1],
+  ["monde","La Terre et ceux qui l’habitent",1],["neige","Précipitation formée de cristaux de glace",1],
+  ["nuage","Masse visible de gouttelettes dans le ciel",1],["océan","Immense étendue d’eau salée",1],
+  ["ombre","Zone sombre créée par un obstacle à la lumière",1],["plage","Étendue de sable ou de galets au bord de l’eau",1],
+  ["plume","Élément léger qui couvre le corps des oiseaux",1],["porte","Ouverture mobile permettant d’entrer",1],
+  ["pomme","Fruit rond du pommier",1],["reine","Femme qui règne ou épouse d’un roi",1],
+  ["route","Voie aménagée pour circuler",1],["sable","Matière formée de très petits grains",1],
+  ["signe","Marque porteuse d’une information",2],["table","Meuble formé d’un plateau et de pieds",1],
+  ["tigre","Grand félin asiatique rayé",1],["train","Suite de véhicules circulant sur des rails",1],
+  ["verre","Matière transparente ou récipient pour boire",1],["voile","Pièce de tissu poussée par le vent",2],
+  ["zèbre","Équidé africain au pelage rayé",1],["aigle","Grand oiseau de proie",1],
+  ["ancre","Pièce lourde qui immobilise un bateau",1],["badge","Petit insigne porté sur un vêtement",1],
+  ["berge","Bord naturel d’un cours d’eau",2],["crâne","Boîte osseuse protégeant le cerveau",2],
+  ["étang","Petite étendue d’eau stagnante",2],["foyer","Lieu où brûle un feu ou cellule familiale",2],
+  ["grain","Petite semence ou minuscule particule",2],["lueur","Clarté faible ou passagère",2],
+  ["noyau","Partie centrale dure d’un fruit",2],["pente","Inclinaison d’un terrain",2],
+  ["rival","Personne qui poursuit le même objectif",2],["somme","Résultat d’une addition",2],
+  ["trace","Marque laissée par un passage",2],["usine","Établissement de production industrielle",2]
+];
+
 export const oddSets: Array<[string, string[], number]> = [
   ["Géographie",["France","Italie","Espagne","Andes"],1],["Animaux",["Lion","Tigre","Léopard","Dauphin"],1],
   ["Peinture",["Monet","Renoir","Degas","Mozart"],1],["Planètes",["Mars","Vénus","Jupiter","Sirius"],1],
@@ -237,20 +268,4 @@ export const timelines: Array<[string, string[], number]> = [
   ["Classe ces ères géologiques de la plus ancienne à la plus récente.",["Précambrien","Paléozoïque","Mésozoïque","Cénozoïque"],3],
   ["Classe ces styles architecturaux.",["Roman","Gothique","Baroque","Art nouveau"],3],
   ["Classe les étapes d’une démarche scientifique.",["Observation","Hypothèse","Expérience","Conclusion"],1]
-];
-
-export const letterBanks: Array<[string, string[], number]> = [
-  ["ARTEP",["art","rat","tare","rate","pate","taper","parte"],3],["ROUTE",["roue","tour","trou","tuer","route","outre"],3],
-  ["LAMPE",["mal","palme","lame","male","ample","pale"],3],["CARTE",["arc","art","car","race","trace","carte"],3],
-  ["PLAGE",["gel","page","pale","plage"],3],["POIRE",["roi","proie","pire","poire"],3],
-  ["IMAGE",["ami","mai","mage","image"],3],["TIGRE",["tir","rite","tige","tigre"],3],
-  ["SABLE",["bal","base","sale","sable"],3],["CRANE",["arc","race","cran","crane"],3],
-  ["NUAGE",["age","ange","auge","nuage"],3],["CHAIR",["air","char","chair"],3],
-  ["TABLE",["bal","bat","bale","table"],3],["FLEUR",["feu","leur","fleur"],3],
-  ["PIANO",["pain","pion","piano"],3],["MONDE",["don","mode","onde","monde"],3],
-  ["VIOLE",["vie","vol","voile","viole"],3],["PERLE",["reel","peler","perle"],3],
-  ["PRISE",["pis","pire","prise"],3],["SALON",["sol","son","sale","salon"],3],
-  ["RIVAGE",["air","gare","rage","virage","rivage"],3],["ORANGE",["ange","gare","orge","orange"],3],
-  ["JARDIN",["air","radin","jardin"],3],["SOLEIL",["sol","sel","soie","soleil"],3],
-  ["ANCRE",["arc","race","cran","ancre"],3]
 ];

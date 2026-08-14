@@ -1,4 +1,4 @@
-export type GameType = 'mcq' | 'boolean' | 'odd' | 'order' | 'anagram' | 'missing' | 'clues' | 'letters';
+export type GameType = 'mcq' | 'boolean' | 'odd' | 'order' | 'anagram' | 'missing' | 'clues' | 'wordle';
 
 export interface BaseChallenge {
   id: string;
@@ -33,14 +33,13 @@ export interface CluesChallenge extends BaseChallenge {
   clues: string[];
 }
 
-export interface LettersChallenge extends BaseChallenge {
-  type: 'letters';
-  letters: string;
-  accepted: string[];
-  target: number;
+export interface WordleChallenge extends BaseChallenge {
+  type: 'wordle';
+  answer: string;
+  maxAttempts: number;
 }
 
-export type Challenge = ChoiceChallenge | OrderChallenge | TextChallenge | CluesChallenge | LettersChallenge;
+export type Challenge = ChoiceChallenge | OrderChallenge | TextChallenge | CluesChallenge | WordleChallenge;
 
 export interface MiniGameEngine<T extends Challenge = Challenge> {
   type: T['type'];
@@ -61,7 +60,7 @@ export interface RunState {
   startedAt: number;
   draftText?: string;
   draftOrder?: string[];
-  draftWords?: string[];
+  draftGuesses?: string[];
   draftCluesShown?: number;
   draftHintPenalty?: number;
 }

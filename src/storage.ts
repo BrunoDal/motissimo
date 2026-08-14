@@ -1,6 +1,6 @@
 import type { Preferences, RunState, Stats } from './types';
 
-const RUN_KEY = 'motissimo-run-v1';
+const RUN_KEY = 'motissimo-run-v2';
 const STATS_KEY = 'motissimo-stats-v1';
 const PREFS_KEY = 'motissimo-prefs-v1';
 

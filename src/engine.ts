@@ -14,8 +14,27 @@ export function getLevel(successes: number): number {
 }
 
 export function getTimeLimit(challenge: Challenge, level: number): number {
-  const base = challenge.type === 'letters' ? 35_000 : challenge.type === 'order' ? 28_000 : challenge.type === 'clues' ? 25_000 : 20_000;
-  return Math.max(challenge.type === 'letters' ? 20_000 : 9_000, base - (level - 1) * 850);
+  const base = challenge.type === 'wordle' ? 55_000 : challenge.type === 'order' ? 28_000 : challenge.type === 'clues' ? 25_000 : 20_000;
+  return Math.max(challenge.type === 'wordle' ? 32_000 : 9_000, base - (level - 1) * 850);
+}
+
+export type WordleMark = 'correct' | 'present' | 'absent';
+
+export function evaluateWordleGuess(guessValue: string, answerValue: string): WordleMark[] {
+  const guess = [...normalizeText(guessValue)];
+  const answer = [...normalizeText(answerValue)];
+  const marks: WordleMark[] = Array(guess.length).fill('absent');
+  const remaining = new Map<string, number>();
+  answer.forEach((letter, index) => {
+    if (guess[index] === letter) marks[index] = 'correct';
+    else remaining.set(letter, (remaining.get(letter) ?? 0) + 1);
+  });
+  guess.forEach((letter, index) => {
+    if (marks[index] === 'correct') return;
+    const count = remaining.get(letter) ?? 0;
+    if (count > 0) { marks[index] = 'present'; remaining.set(letter, count - 1); }
+  });
+  return marks;
 }
 
 export function validateChallenge(challenge: Challenge, answer: unknown): boolean {
@@ -24,12 +43,6 @@ export function validateChallenge(challenge: Challenge, answer: unknown): boolea
   }
   if (challenge.type === 'order') {
     return Array.isArray(answer) && answer.length === challenge.answer.length && answer.every((item, index) => item === challenge.answer[index]);
-  }
-  if (challenge.type === 'letters') {
-    if (!Array.isArray(answer)) return false;
-    const accepted = new Set(challenge.accepted.map(normalizeText));
-    const unique = new Set(answer.map(item => normalizeText(String(item))).filter(item => accepted.has(item)));
-    return unique.size >= challenge.target;
   }
   return 'answer' in challenge && normalizeText(String(answer ?? '')) === normalizeText(challenge.answer);
 }
@@ -50,8 +63,8 @@ export function pickChallenge(all: Challenge[], level: number, recentIds: string
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export const miniGameEngines: MiniGameEngine[] = (['mcq','boolean','odd','order','anagram','missing','clues','letters'] as const).map(type => ({
+export const miniGameEngines: MiniGameEngine[] = (['mcq','boolean','odd','order','anagram','missing','clues','wordle'] as const).map(type => ({
   type,
   validate: validateChallenge,
-  timeLimit: level => Math.max(type === 'letters' ? 20_000 : 9_000, (type === 'letters' ? 35_000 : type === 'order' ? 28_000 : 20_000) - (level - 1) * 850)
+  timeLimit: level => Math.max(type === 'wordle' ? 32_000 : 9_000, (type === 'wordle' ? 55_000 : type === 'order' ? 28_000 : 20_000) - (level - 1) * 850)
 }));

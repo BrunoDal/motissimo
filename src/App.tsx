@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { frenchChallenges } from './content';
-import { calculatePoints, getLevel, getTimeLimit, pickChallenge, validateChallenge } from './engine';
+import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
 import type { Challenge, Preferences, RunState, Stats } from './types';
 
@@ -9,7 +9,7 @@ type Feedback = { correct: boolean; points: number; message: string } | null;
 
 const gameLabels: Record<Challenge['type'], string> = {
   mcq: 'QCM express', boolean: 'Vrai ou faux', odd: 'L’intrus', order: 'Remets dans l’ordre',
-  anagram: 'Anagramme', missing: 'Mot à trous', clues: 'Trois indices', letters: 'Lettres imposées'
+  anagram: 'Anagramme', missing: 'Mot à trous', clues: 'Trois indices', wordle: 'Mot mystère'
 };
 
 function formatScore(score: number) { return new Intl.NumberFormat('fr-FR').format(score); }
@@ -41,7 +41,8 @@ export default function App() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [answer, setAnswer] = useState('');
   const [ordered, setOrdered] = useState<string[]>([]);
-  const [letterWords, setLetterWords] = useState<string[]>([]);
+  const [wordleGuesses, setWordleGuesses] = useState<string[]>([]);
+  const [wordleError, setWordleError] = useState('');
   const [cluesShown, setCluesShown] = useState(1);
   const [hintPenalty, setHintPenalty] = useState(0);
   const [lastScore, setLastScore] = useState(0);
@@ -58,7 +59,7 @@ export default function App() {
   }, [run]);
 
   const prepareChallenge = useCallback((challenge: Challenge, saved?: RunState) => {
-    setAnswer(saved?.draftText ?? ''); setLetterWords(saved?.draftWords ?? []); setCluesShown(saved?.draftCluesShown ?? 1); setHintPenalty(saved?.draftHintPenalty ?? 0); setFeedback(null);
+    setAnswer(saved?.draftText ?? ''); setWordleGuesses(saved?.draftGuesses ?? []); setWordleError(''); setCluesShown(saved?.draftCluesShown ?? 1); setHintPenalty(saved?.draftHintPenalty ?? 0); setFeedback(null);
     if (challenge.type === 'order') setOrdered(saved?.draftOrder ?? [...challenge.items]); else setOrdered([]);
   }, []);
 
@@ -84,7 +85,7 @@ export default function App() {
     const shouldBonus = wasCorrect && state.combo > 0 && state.combo % 25 === 0 && state.lives < 3;
     const level = getLevel(state.successes);
     const current = pickChallenge(frenchChallenges, level, state.recentIds, state.current.type, shouldBonus);
-    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftWords: [], draftCluesShown: 1, draftHintPenalty: 0 };
+    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
     prepareChallenge(current); setRun(next);
   }, [finishGame, prepareChallenge]);
 
@@ -135,13 +136,13 @@ export default function App() {
 
   useEffect(() => {
     if (!run) return;
-    setRun(old => old && old.current.id === run.current.id ? { ...old, draftText: answer, draftOrder: ordered, draftWords: letterWords, draftCluesShown: cluesShown, draftHintPenalty: hintPenalty } : old);
-  }, [answer, ordered, letterWords, cluesShown, hintPenalty, run?.current.id]);
+    setRun(old => old && old.current.id === run.current.id ? { ...old, draftText: answer, draftOrder: ordered, draftGuesses: wordleGuesses, draftCluesShown: cluesShown, draftHintPenalty: hintPenalty } : old);
+  }, [answer, ordered, wordleGuesses, cluesShown, hintPenalty, run?.current.id]);
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     if (!run || feedback) return;
-    const value: unknown = run.current.type === 'order' ? ordered : run.current.type === 'letters' ? letterWords : answer;
+    const value: unknown = run.current.type === 'order' ? ordered : answer;
     resolveAnswer(validateChallenge(run.current, value));
   };
 
@@ -150,11 +151,23 @@ export default function App() {
     resolveAnswer(validateChallenge(run.current, index));
   };
 
-  const addLetterWord = (event: FormEvent) => {
+  const submitWordle = (event: FormEvent) => {
     event.preventDefault();
-    const value = answer.trim();
-    if (!value || letterWords.some(word => word.toLocaleLowerCase() === value.toLocaleLowerCase())) return;
-    setLetterWords(old => [...old, value]); setAnswer('');
+    if (!run || run.current.type !== 'wordle' || feedback) return;
+    const guess = normalizeText(answer);
+    const target = normalizeText(run.current.answer);
+    if (!/^[a-z]+$/.test(guess) || guess.length !== target.length) {
+      setWordleError(`Entre un mot de ${target.length} lettres.`); return;
+    }
+    if (wordleGuesses.includes(guess)) { setWordleError('Ce mot a déjà été proposé.'); return; }
+    const nextGuesses = [...wordleGuesses, guess];
+    setWordleGuesses(nextGuesses); setAnswer('');
+    if (guess === target) resolveAnswer(true);
+    else if (nextGuesses.length >= run.current.maxAttempts) resolveAnswer(false);
+    else {
+      setWordleError(`${run.current.maxAttempts-nextGuesses.length} essai${run.current.maxAttempts-nextGuesses.length>1?'s':''} restant${run.current.maxAttempts-nextGuesses.length>1?'s':''}.`);
+      if (prefs.vibration && navigator.vibrate) navigator.vibrate(18);
+    }
   };
 
   const level = run ? getLevel(run.successes) : 1;
@@ -173,13 +186,27 @@ export default function App() {
     if (challenge.type === 'order') {
       return <><p className="microcopy">Du plus ancien au plus récent</p><div className="order-list">{ordered.map((item, index) => <div className="order-item" key={item}><b>{index + 1}</b><span>{item}</span><div><button aria-label={`Monter ${item}`} disabled={index === 0 || !!feedback} onClick={() => setOrdered(list => { const copy=[...list]; [copy[index-1],copy[index]]=[copy[index],copy[index-1]]; return copy; })}>↑</button><button aria-label={`Descendre ${item}`} disabled={index === ordered.length-1 || !!feedback} onClick={() => setOrdered(list => { const copy=[...list]; [copy[index+1],copy[index]]=[copy[index],copy[index+1]]; return copy; })}>↓</button></div></div>)}</div><button className="primary full" onClick={() => submit()} disabled={!!feedback}>Valider l’ordre</button></>;
     }
-    if (challenge.type === 'letters') {
-      return <><div className="letter-rack" aria-label={`Lettres ${challenge.letters}`}>{[...challenge.letters].map((letter,index)=><span key={`${letter}-${index}`}>{letter}</span>)}</div><form className="answer-form" onSubmit={addLetterWord}><input autoFocus value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Écris un mot" disabled={!!feedback}/><button aria-label="Ajouter le mot">+</button></form><div className="word-chips">{letterWords.map(word=><button key={word} onClick={()=>setLetterWords(list=>list.filter(item=>item!==word))}>{word} ×</button>)}</div><p className="microcopy">{letterWords.length} mot{letterWords.length>1?'s':''} proposé{letterWords.length>1?'s':''} · objectif {challenge.target}</p><button className="primary full" onClick={() => submit()} disabled={letterWords.length < challenge.target || !!feedback}>Valider mes mots</button></>;
+    if (challenge.type === 'wordle') {
+      const targetLength = normalizeText(challenge.answer).length;
+      return <form className="wordle-game" onSubmit={submitWordle}>
+        <div className="wordle-board" aria-label={`${wordleGuesses.length} essai${wordleGuesses.length>1?'s':''} sur ${challenge.maxAttempts}`}>
+          {Array.from({length:challenge.maxAttempts},(_,rowIndex)=>{
+            const completed = wordleGuesses[rowIndex];
+            const displayed = completed ?? (rowIndex===wordleGuesses.length ? normalizeText(answer) : '');
+            const marks = completed ? evaluateWordleGuess(completed, challenge.answer) : [];
+            return <div className={`wordle-row ${completed?'revealed':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=><span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??''}</span>)}</div>;
+          })}
+        </div>
+        <label className="sr-only" htmlFor="wordle-answer">Propose un mot de {targetLength} lettres</label>
+        <input id="wordle-answer" autoFocus autoComplete="off" autoCapitalize="characters" maxLength={targetLength} value={answer} onChange={e=>{setAnswer(e.target.value);setWordleError('');}} placeholder={`${targetLength} lettres…`} disabled={!!feedback}/>
+        <div className="wordle-help" aria-live="polite">{wordleError||'Vert : bien placée · Jaune : présente'}</div>
+        <button className="primary full" disabled={normalizeText(answer).length!==targetLength || !!feedback}>Essayer</button>
+      </form>;
     }
     return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>+ Voir un indice <small>−35 pts</small></button>}</div>}<label className="sr-only" htmlFor="answer">Ta réponse</label><input id="answer" autoFocus autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Ta réponse…" disabled={!!feedback}/><button className="primary full" disabled={!answer.trim() || !!feedback}>Valider</button></form>;
   // Dependencies intentionally include transient answer state used by all game renderers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.current, ordered, letterWords, answer, cluesShown, feedback]);
+  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback]);
 
   return <div className={`app ${appClass}`}>
     {screen === 'home' && <main className="home screen">
@@ -197,7 +224,7 @@ export default function App() {
       <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
       <div className="timer-track"><div style={{width:`${progress}%`}} className={progress<25?'danger':''}/></div>
       <section className="game-meta"><span>Niveau {level}</span><b>{run.bonusRound?'★ Défi vie bonus':gameLabels[run.current.type]}</b><span className={run.combo>0?'combo-live':''}>🔥 {run.combo}</span></section>
-      <section className="challenge-card" key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2>{gameCard}</section>
+      <section className={`challenge-card challenge-${run.current.type}`} key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2>{gameCard}</section>
       <footer className="game-footer"><span>Record {formatScore(record)}</span><span>{Math.ceil(run.remainingMs/1000)} s</span></footer>
       {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status" aria-live="assertive"><div className="feedback-symbol">{feedback.correct?'✓':'×'}</div>{!feedback.correct && <div className="life-loss"><span>♥</span><b>−1 VIE</b><i/><i/><i/></div>}<h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points)} points</strong>:<p>{run.current.explanation}</p>}</div>}
     </main>}

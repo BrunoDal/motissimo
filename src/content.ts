@@ -1,4 +1,4 @@
-import { facts, letterBanks, oddSets, timelines, words } from './data/fr';
+import { facts, oddSets, timelines, wordleWords, words } from './data/fr';
 import type { Challenge, ChoiceChallenge } from './types';
 
 function hash(text: string) {
@@ -37,15 +37,6 @@ function anagram(word: string, mode: number) {
   return value;
 }
 
-function canBuildWord(word: string, letters: string) {
-  const available = [...letters.toLocaleLowerCase('fr-FR')].reduce<Record<string, number>>((counts, letter) => ({ ...counts, [letter]: (counts[letter] ?? 0) + 1 }), {});
-  return [...word.toLocaleLowerCase('fr-FR')].every(letter => {
-    if (!available[letter]) return false;
-    available[letter]--;
-    return true;
-  });
-}
-
 export function buildFrenchChallenges(): Challenge[] {
   const challenges: Challenge[] = [];
 
@@ -78,13 +69,12 @@ export function buildFrenchChallenges(): Challenge[] {
     challenges.push({ id: `word-${index}-clues-1`, type: 'clues', category: 'Vocabulaire', difficulty: Math.min(5, difficulty + 1), prompt: 'Quel mot se cache derrière ces indices ?', answer: word, clues: [clue3, clue2, definition], explanation: `La réponse était « ${word} ».` });
   });
 
-  letterBanks.forEach(([letters, accepted, target], index) => {
-    const validWords = accepted.filter(word => canBuildWord(word, letters));
-    for (let variant = 0; variant < 5; variant++) {
+  wordleWords.forEach(([word, definition, difficulty], index) => {
+    for (let variant = 0; variant < 3; variant++) {
       challenges.push({
-        id: `letters-${index}-${variant}`, type: 'letters', category: 'Lettres', difficulty: Math.min(5, 1 + Math.floor(variant / 2)),
-        prompt: `Trouve au moins ${target} mots avec ces lettres.`, letters: shuffled([...letters], `letters-${index}-${variant}`).join(''),
-        accepted: validWords, target, explanation: `Exemples : ${validWords.slice(0, 5).join(', ')}.`
+        id: `wordle-${index}-${variant}`, type: 'wordle', category: 'Mot mystère', difficulty: Math.min(5, difficulty + variant),
+        prompt: 'Trouve le mot mystère en six essais.', answer: word, maxAttempts: 6,
+        explanation: `${word} : ${definition.toLocaleLowerCase('fr-FR')}.`
       });
     }
   });
