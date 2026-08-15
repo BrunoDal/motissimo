@@ -47,11 +47,12 @@ export default function VirtualKeyboard({ value, onLetter, onBackspace, onEnter,
   }
 
   const rows = keyboardRows[language];
+  const actionRowIndex = language === 'pl' ? rows.length - 2 : rows.length - 1;
   return <div className={`virtual-keyboard alphabet-keyboard keyboard-${language}`} aria-label={labels.keyboard}>
     {rows.map((row, rowIndex) => <div className="keyboard-row" key={row}>
-      {rowIndex === rows.length-1 && <button type="button" className="key action-key" onClick={onBackspace} disabled={disabled} aria-label={labels.erase}>⌫</button>}
+      {rowIndex === actionRowIndex && <button type="button" className="key action-key" onClick={onBackspace} disabled={disabled} aria-label={labels.erase}>⌫</button>}
       {[...row].map(letter => <button type="button" className={`key ${marks[letter] ?? ''}`} key={letter} disabled={disabled} onClick={() => onLetter(letter)} aria-label={`${labels.letter} ${letter}`}>{letter}</button>)}
-      {rowIndex === rows.length-1 && <button type="button" className="key action-key enter-symbol" onClick={onEnter} disabled={disabled || !canSubmit} aria-label={labels.validate}>✓</button>}
+      {rowIndex === actionRowIndex && <button type="button" className="key action-key enter-symbol" onClick={onEnter} disabled={disabled || !canSubmit} aria-label={labels.validate}>✓</button>}
     </div>)}
   </div>;
 }

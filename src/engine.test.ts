@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildFrenchChallenges } from './content';
-import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, validateChallenge } from './engine';
+import { buildFrenchChallenges, buildPolishChallenges } from './content';
+import { booleanAnswer, calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 
 describe('moteur Motissimo', () => {
   it('fournit exactement dix mille défis dans les huit formats', () => {
@@ -39,5 +39,25 @@ describe('moteur Motissimo', () => {
     const base = calculatePoints(1, 0, 20_000, 1);
     expect(calculatePoints(3, 15_000, 20_000, 10)).toBeGreaterThan(base);
     expect(calculatePoints(1, 0, 20_000, 1, true)).toBeGreaterThan(base);
+  });
+
+  it('équilibre vrai et faux dès le premier niveau sans longue série', () => {
+    for (const challenges of [buildFrenchChallenges(),buildPolishChallenges()]) {
+      let recentIds: string[] = [];
+      let recentTruth: boolean[] = [];
+      const answers: boolean[] = [];
+      for (let index=0;index<100;index++) {
+        const challenge = pickChallenge(challenges,1,recentIds,undefined,false,'boolean',recentTruth);
+        const truth = booleanAnswer(challenge);
+        expect(truth).not.toBeUndefined();
+        answers.push(truth!);
+        recentTruth = [...recentTruth,truth!].slice(-12);
+        recentIds = [...recentIds,challenge.sourceId ?? challenge.id].slice(-600);
+      }
+      const trueCount = answers.filter(Boolean).length;
+      expect(trueCount).toBeGreaterThanOrEqual(40);
+      expect(trueCount).toBeLessThanOrEqual(60);
+      expect(answers.some((answer,index) => answer === answers[index+1] && answer === answers[index+2])).toBe(false);
+    }
   });
 });

@@ -88,7 +88,7 @@ export function buildChallenges(language: Language, limit = 10_000): Challenge[]
     [answer, wrongs[0], wrongs[1]].forEach((proposal, variant) => {
       const correct = proposal === answer ? copy.true : copy.false;
       baseChallenges.push(choice(
-        `${language}-fact-${index}-vf-${variant}`, 'boolean', category, Math.min(5, difficulty + (variant ? 1 : 0)),
+        `${language}-fact-${index}-vf-${variant}`, 'boolean', category, difficulty,
         copy.answerClaim(question, proposal), correct, [correct === copy.true ? copy.false : copy.true], explanation
       ));
     });

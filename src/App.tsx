@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { challengesByLanguage } from './content';
-import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
+import { booleanAnswer, calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
 import type { Challenge, GameMode, GameType, Language, Preferences, RunState, Stats } from './types';
 import VirtualKeyboard, { type LetterMark } from './VirtualKeyboard';
@@ -72,7 +72,8 @@ export default function App() {
   const startNew = useCallback(() => {
     const onlyType = prefs.gameMode === 'mix' ? undefined : prefs.gameMode;
     const current = pickChallenge(challengesByLanguage[prefs.language], 1, [], undefined, false, onlyType);
-    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.sourceId ?? current.id], bonusRound: false, startedAt: Date.now(), mode:prefs.gameMode, language:prefs.language };
+    const firstBooleanAnswer = booleanAnswer(current);
+    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.sourceId ?? current.id], recentBooleanAnswers:firstBooleanAnswer === undefined ? [] : [firstBooleanAnswer], bonusRound: false, startedAt: Date.now(), mode:prefs.gameMode, language:prefs.language };
     setRun(next); prepareChallenge(current, undefined, prefs.language); setScreen('game');
   }, [prepareChallenge, prefs.gameMode, prefs.language]);
 
@@ -92,8 +93,10 @@ export default function App() {
     const shouldBonus = wasCorrect && state.combo > 0 && state.combo % 25 === 0 && state.lives < 3;
     const level = getLevel(state.successes);
     const onlyType = state.mode === 'mix' ? undefined : state.mode;
-    const current = pickChallenge(challengesByLanguage[state.language], level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType);
-    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-600), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
+    const current = pickChallenge(challengesByLanguage[state.language], level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType, state.recentBooleanAnswers);
+    const currentBooleanAnswer = booleanAnswer(current);
+    const recentBooleanAnswers = currentBooleanAnswer === undefined ? (state.recentBooleanAnswers ?? []) : [...(state.recentBooleanAnswers ?? []),currentBooleanAnswer].slice(-12);
+    const next = { ...state, current, recentBooleanAnswers, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-600), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
     prepareChallenge(current, undefined, state.language); setRun(next);
   }, [finishGame, prepareChallenge]);
 

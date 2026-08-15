@@ -55,13 +55,30 @@ export function calculatePoints(level: number, remainingMs: number, totalMs: num
   return Math.round((base + speed) * multiplier * (bonusRound ? 1.5 : 1));
 }
 
-export function pickChallenge(all: Challenge[], level: number, recentIds: string[], previousType?: Challenge['type'], bonus = false, onlyType?: GameType): Challenge {
+function booleanAnswer(challenge: Challenge): boolean | undefined {
+  if (challenge.type !== 'boolean') return undefined;
+  const answer = normalizeText(challenge.choices[challenge.correctIndex]);
+  if (answer === 'vrai' || answer === 'prawda') return true;
+  if (answer === 'faux' || answer === 'falsz') return false;
+  return undefined;
+}
+
+export function pickChallenge(all: Challenge[], level: number, recentIds: string[], previousType?: Challenge['type'], bonus = false, onlyType?: GameType, recentBooleanAnswers: boolean[] = []): Challenge {
   const targetDifficulty = Math.min(5, bonus ? Math.max(3, level) : Math.max(1, Math.ceil(level / 2)));
   const modePool = onlyType ? all.filter(item => item.type === onlyType) : all;
   let pool = modePool.filter(item => item.difficulty <= targetDifficulty && (!previousType || item.type !== previousType));
   if (bonus) pool = pool.filter(item => item.difficulty >= Math.min(3, targetDifficulty));
   if (!pool.length) pool = modePool.filter(item => item.difficulty <= targetDifficulty);
   if (!pool.length) pool = modePool;
+
+  const recentTruth = recentBooleanAnswers.slice(-6);
+  const lastTwoMatch = recentTruth.length >= 2 && recentTruth.at(-1) === recentTruth.at(-2);
+  const trueCount = recentTruth.filter(Boolean).length;
+  const desiredTruth = lastTwoMatch ? !recentTruth.at(-1)! : recentTruth.length >= 4 && Math.abs(trueCount - (recentTruth.length - trueCount)) >= 2 ? trueCount < recentTruth.length / 2 : undefined;
+  if (desiredTruth !== undefined) {
+    const balancedPool = pool.filter(item => item.type !== 'boolean' || booleanAnswer(item) === desiredTruth);
+    if (balancedPool.length) pool = balancedPool;
+  }
 
   const lastSeen = new Map<string, number>();
   recentIds.forEach((id,index) => lastSeen.set(id,index));
@@ -72,6 +89,8 @@ export function pickChallenge(all: Challenge[], level: number, recentIds: string
   const leastRecentlySeen = pool.filter(item => (lastSeen.get(item.sourceId ?? item.id) ?? -1) === oldestIndex);
   return leastRecentlySeen[Math.floor(Math.random() * leastRecentlySeen.length)];
 }
+
+export { booleanAnswer };
 
 export const miniGameEngines: MiniGameEngine[] = (['mcq','boolean','odd','order','anagram','missing','clues','wordle'] as const).map(type => ({
   type,

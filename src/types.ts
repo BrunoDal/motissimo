@@ -59,6 +59,7 @@ export interface RunState {
   current: Challenge;
   remainingMs: number;
   recentIds: string[];
+  recentBooleanAnswers?: boolean[];
   bonusRound: boolean;
   startedAt: number;
   mode: GameMode;
