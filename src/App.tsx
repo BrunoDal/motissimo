@@ -1,9 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { frenchChallenges } from './content';
 import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
 import type { Challenge, GameMode, GameType, Preferences, RunState, Stats } from './types';
+import VirtualKeyboard, { type LetterMark } from './VirtualKeyboard';
 
 type Screen = 'home' | 'game' | 'pause' | 'gameover' | 'rules' | 'settings' | 'modes';
 type Feedback = { correct: boolean; points: number; message: string } | null;
@@ -54,8 +54,6 @@ export default function App() {
   const [cluesShown, setCluesShown] = useState(1);
   const [hintPenalty, setHintPenalty] = useState(0);
   const [lastScore, setLastScore] = useState(0);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [visibleHeight, setVisibleHeight] = useState(() => window.visualViewport?.height ?? window.innerHeight);
   const runRef = useRef(run);
   const feedbackRef = useRef(feedback);
 
@@ -69,7 +67,8 @@ export default function App() {
   }, [run]);
 
   const prepareChallenge = useCallback((challenge: Challenge, saved?: RunState) => {
-    setAnswer(saved?.draftText ?? ''); setWordleGuesses(saved?.draftGuesses ?? []); setWordleError(''); setCluesShown(saved?.draftCluesShown ?? 1); setHintPenalty(saved?.draftHintPenalty ?? 0); setFeedback(null);
+    const firstLetter = challenge.type === 'wordle' ? normalizeText(challenge.answer)[0] : '';
+    setAnswer(saved?.draftText || firstLetter); setWordleGuesses(saved?.draftGuesses ?? []); setWordleError(''); setCluesShown(saved?.draftCluesShown ?? 1); setHintPenalty(saved?.draftHintPenalty ?? 0); setFeedback(null);
     if (challenge.type === 'order') setOrdered(saved?.draftOrder ?? [...challenge.items]); else setOrdered([]);
   }, []);
 
@@ -147,38 +146,6 @@ export default function App() {
   }, [screen]);
 
   useEffect(() => {
-    const viewport = window.visualViewport;
-    let baselineHeight = viewport?.height ?? window.innerHeight;
-    let timer = 0;
-    const isEditable = (element: Element | null) =>
-      (element instanceof HTMLInputElement && !['checkbox','radio','button','submit'].includes(element.type)) ||
-      element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement ||
-      (element instanceof HTMLElement && element.isContentEditable);
-    const updateKeyboard = () => {
-      const activeElement = document.activeElement;
-      const activeInput = isEditable(activeElement);
-      const currentHeight = viewport?.height ?? window.innerHeight;
-      setVisibleHeight(Math.round(currentHeight));
-      if (!activeInput) baselineHeight = Math.max(baselineHeight, currentHeight);
-      const visiblyReduced = currentHeight < baselineHeight * .82;
-      setKeyboardOpen(screen === 'game' && activeInput && (visiblyReduced || !viewport));
-      if (activeInput && visiblyReduced) window.requestAnimationFrame(() => activeElement?.scrollIntoView({ block:'nearest', inline:'nearest' }));
-    };
-    const onFocus = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 180); };
-    const onBlur = () => { window.clearTimeout(timer); timer = window.setTimeout(updateKeyboard, 80); };
-    document.addEventListener('focusin', onFocus);
-    document.addEventListener('focusout', onBlur);
-    viewport?.addEventListener('resize', updateKeyboard);
-    const onOrientation = () => window.setTimeout(() => { baselineHeight = viewport?.height ?? window.innerHeight; updateKeyboard(); }, 250);
-    window.addEventListener('orientationchange', onOrientation);
-    updateKeyboard();
-    return () => {
-      window.clearTimeout(timer); document.removeEventListener('focusin', onFocus); document.removeEventListener('focusout', onBlur);
-      viewport?.removeEventListener('resize', updateKeyboard); window.removeEventListener('orientationchange', onOrientation);
-    };
-  }, [screen]);
-
-  useEffect(() => {
     if (!run) return;
     setRun(old => old && old.current.id === run.current.id ? { ...old, draftText: answer, draftOrder: ordered, draftGuesses: wordleGuesses, draftCluesShown: cluesShown, draftHintPenalty: hintPenalty } : old);
   }, [answer, ordered, wordleGuesses, cluesShown, hintPenalty, run?.current.id]);
@@ -195,8 +162,8 @@ export default function App() {
     resolveAnswer(validateChallenge(run.current, index));
   };
 
-  const submitWordle = (event: FormEvent) => {
-    event.preventDefault();
+  const submitWordle = (event?: FormEvent) => {
+    event?.preventDefault();
     if (!run || run.current.type !== 'wordle' || feedback) return;
     const guess = normalizeText(answer);
     const target = normalizeText(run.current.answer);
@@ -206,7 +173,7 @@ export default function App() {
     if (guess[0] !== target[0]) { setWordleError(`Le mot doit commencer par ${target[0].toLocaleUpperCase('fr-FR')}.`); return; }
     if (wordleGuesses.includes(guess)) { setWordleError('Ce mot a déjà été proposé.'); return; }
     const nextGuesses = [...wordleGuesses, guess];
-    setWordleGuesses(nextGuesses); setAnswer('');
+    setWordleGuesses(nextGuesses); setAnswer(target[0]);
     if (guess === target) resolveAnswer(true);
     else if (nextGuesses.length >= run.current.maxAttempts) resolveAnswer(false);
     else {
@@ -215,13 +182,51 @@ export default function App() {
     }
   };
 
+  const appendLetter = useCallback((rawLetter: string) => {
+    if (!run || feedback) return;
+    const challenge = run.current;
+    if (challenge.type !== 'anagram' && challenge.type !== 'missing' && challenge.type !== 'clues' && challenge.type !== 'wordle') return;
+    const letter = normalizeText(rawLetter).slice(0, 1);
+    if (!letter) return;
+    const maxLength = normalizeText(challenge.answer).length;
+    setAnswer(current => {
+      const normalized = normalizeText(current);
+      if (normalized.length >= maxLength) return normalized;
+      if (challenge.type === 'anagram') {
+        const available = normalizeText(challenge.display ?? challenge.answer);
+        const usedCount = [...normalized].filter(item => item === letter).length;
+        const availableCount = [...available].filter(item => item === letter).length;
+        if (usedCount >= availableCount) return normalized;
+      }
+      return normalized + letter;
+    });
+    setWordleError('');
+  }, [run?.current, feedback]);
+
+  const eraseLetter = useCallback(() => {
+    if (!run || feedback) return;
+    const protectedLength = run.current.type === 'wordle' ? 1 : 0;
+    setAnswer(current => normalizeText(current).slice(0, Math.max(protectedLength, normalizeText(current).length - 1)));
+    setWordleError('');
+  }, [run?.current, feedback]);
+
+  useEffect(() => {
+    if (screen !== 'game' || !run || !['anagram','missing','clues','wordle'].includes(run.current.type)) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Backspace') { event.preventDefault(); eraseLetter(); return; }
+      if (event.key === 'Enter') { event.preventDefault(); if (run.current.type === 'wordle') submitWordle(); else if (answer.trim()) submit(); return; }
+      if (/^[a-zA-ZÀ-ÿ]$/.test(event.key)) { event.preventDefault(); appendLetter(event.key); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   const level = run ? getLevel(run.successes) : 1;
   const totalTime = run ? getTimeLimit(run.current, level) : 1;
   const progress = run ? Math.max(0, Math.min(100, run.remainingMs / totalTime * 100)) : 0;
   const record = Math.max(stats.bestScore, run?.score ?? 0);
   const accuracy = stats.totalQuestions ? Math.round(stats.totalCorrect / stats.totalQuestions * 100) : 0;
-  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : '', keyboardOpen ? 'keyboard-open' : ''].join(' ');
-  const appStyle = { '--visible-height': `${visibleHeight}px` } as CSSProperties;
+  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : ''].join(' ');
 
   const gameCard = useMemo(() => {
     if (!run) return null;
@@ -235,6 +240,14 @@ export default function App() {
     if (challenge.type === 'wordle') {
       const targetLength = normalizeText(challenge.answer).length;
       const firstLetter = normalizeText(challenge.answer)[0].toLocaleUpperCase('fr-FR');
+      const markPriority: Record<LetterMark, number> = { absent:1, present:2, correct:3 };
+      const keyboardMarks = wordleGuesses.reduce<Record<string, LetterMark>>((result, guess) => {
+        evaluateWordleGuess(guess, challenge.answer).forEach((mark, index) => {
+          const letter = guess[index]?.toLocaleUpperCase('fr-FR');
+          if (letter && (!result[letter] || markPriority[mark] > markPriority[result[letter]])) result[letter] = mark;
+        });
+        return result;
+      }, { [firstLetter]:'correct' });
       return <form className="wordle-game" onSubmit={submitWordle}>
         <div className="wordle-first-letter"><span>{firstLetter}</span> Première lettre offerte</div>
         <div className="wordle-board" aria-label={`${wordleGuesses.length} essai${wordleGuesses.length>1?'s':''} sur ${challenge.maxAttempts}`}>
@@ -243,22 +256,20 @@ export default function App() {
             const displayed = completed ?? (rowIndex===wordleGuesses.length ? normalizeText(answer) : '');
             const marks = completed ? evaluateWordleGuess(completed, challenge.answer) : [];
             const active = rowIndex === wordleGuesses.length;
-            const hideForKeyboard = keyboardOpen && !!completed && rowIndex < wordleGuesses.length - 2;
-            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''} ${hideForKeyboard?'keyboard-hidden':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=>{const given=!completed&&letterIndex===0&&!displayed[0];const letter=displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??(given?firstLetter:'');return <span className={`wordle-tile ${marks[letterIndex]??(displayed[letterIndex]?'filled':given?'given':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{letter}</span>;})}</div>;
+            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=>{const given=!completed&&letterIndex===0;const letter=displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??(given?firstLetter:'');return <span className={`wordle-tile ${marks[letterIndex]??(given?'given':displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{letter}</span>;})}</div>;
           })}
         </div>
-        <label className="sr-only" htmlFor="wordle-answer">Propose un mot de {targetLength} lettres</label>
-        <input id="wordle-answer" autoFocus autoComplete="off" autoCapitalize="characters" maxLength={targetLength} value={answer} onChange={e=>{setAnswer(e.target.value);setWordleError('');}} placeholder={`${firstLetter} + ${targetLength-1} lettres…`} disabled={!!feedback}/>
         <div className="wordle-help" aria-live="polite">{wordleError||'Vert : bien placée · Jaune : présente'}</div>
-        <button className="primary full" disabled={normalizeText(answer).length!==targetLength || !!feedback}>Essayer</button>
+        <VirtualKeyboard value={normalizeText(answer)} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submitWordle()} canSubmit={normalizeText(answer).length===targetLength} disabled={!!feedback} marks={keyboardMarks}/>
       </form>;
     }
-    return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>+ Voir un indice <small>−35 pts</small></button>}</div>}<label className="sr-only" htmlFor="answer">Ta réponse</label><input id="answer" autoFocus autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Ta réponse…" disabled={!!feedback}/><button className="primary full" disabled={!answer.trim() || !!feedback}>Valider</button></form>;
+    const bankLetters = challenge.type === 'anagram' ? [...normalizeText(challenge.display ?? challenge.answer).toLocaleUpperCase('fr-FR')] : undefined;
+    return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>+ Voir un indice <small>−35 pts</small></button>}</div>}<div className={`answer-display ${answer?'':'empty'}`} role="textbox" aria-label="Ta réponse" aria-live="polite">{answer ? normalizeText(answer).toLocaleUpperCase('fr-FR') : 'TA RÉPONSE'}</div><VirtualKeyboard value={normalizeText(answer)} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submit()} canSubmit={!!answer.trim()} disabled={!!feedback} letters={bankLetters}/></form>;
   // Dependencies intentionally include transient answer state used by all game renderers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, keyboardOpen]);
+  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, appendLetter, eraseLetter]);
 
-  return <div className={`app ${appClass}`} style={appStyle} data-keyboard-open={keyboardOpen}>
+  return <div className={`app ${appClass}`}>
     {screen === 'home' && <main className="home screen">
       <div className="home-top"><div className="brand-mark">M</div><button className="icon-button" onClick={()=>setScreen('settings')} aria-label="Réglages">⚙</button></div>
       <section className="hero"><span className="eyebrow">QUIZ · MOTS · RECORDS</span><h1>Motissimo</h1><p>Joue avec ta tête.<br/>Va toujours plus loin.</p><div className="hero-orbit orbit-one">?</div><div className="hero-orbit orbit-two">A</div></section>
@@ -270,7 +281,7 @@ export default function App() {
       <button className="text-button" onClick={()=>setScreen('rules')}>Comment jouer ?</button>
     </main>}
 
-    {screen === 'game' && run && <main className={`game screen ${feedback?.correct?'answer-correct':feedback?'answer-wrong':''}`}>
+    {screen === 'game' && run && <main className={`game screen ${['anagram','missing','clues','wordle'].includes(run.current.type)?'virtual-input-game':''} ${feedback?.correct?'answer-correct':feedback?'answer-wrong':''}`}>
       <div className="game-atmosphere" aria-hidden="true"><i/><i/><i/><i/><i/></div>
       <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
       <div className="timer-track"><div style={{width:`${progress}%`}} className={progress<25?'danger':''}/></div>
