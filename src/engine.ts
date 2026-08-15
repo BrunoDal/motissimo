@@ -58,12 +58,19 @@ export function calculatePoints(level: number, remainingMs: number, totalMs: num
 export function pickChallenge(all: Challenge[], level: number, recentIds: string[], previousType?: Challenge['type'], bonus = false, onlyType?: GameType): Challenge {
   const targetDifficulty = Math.min(5, bonus ? Math.max(3, level) : Math.max(1, Math.ceil(level / 2)));
   const modePool = onlyType ? all.filter(item => item.type === onlyType) : all;
-  let pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id) && item.difficulty <= targetDifficulty && (!previousType || item.type !== previousType));
+  let pool = modePool.filter(item => item.difficulty <= targetDifficulty && (!previousType || item.type !== previousType));
   if (bonus) pool = pool.filter(item => item.difficulty >= Math.min(3, targetDifficulty));
-  if (!pool.length) pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id) && item.difficulty <= targetDifficulty);
-  if (!pool.length) pool = modePool.filter(item => !recentIds.includes(item.sourceId ?? item.id));
+  if (!pool.length) pool = modePool.filter(item => item.difficulty <= targetDifficulty);
   if (!pool.length) pool = modePool;
-  return pool[Math.floor(Math.random() * pool.length)];
+
+  const lastSeen = new Map<string, number>();
+  recentIds.forEach((id,index) => lastSeen.set(id,index));
+  const unseen = pool.filter(item => !lastSeen.has(item.sourceId ?? item.id));
+  if (unseen.length) return unseen[Math.floor(Math.random() * unseen.length)];
+
+  const oldestIndex = Math.min(...pool.map(item => lastSeen.get(item.sourceId ?? item.id) ?? -1));
+  const leastRecentlySeen = pool.filter(item => (lastSeen.get(item.sourceId ?? item.id) ?? -1) === oldestIndex);
+  return leastRecentlySeen[Math.floor(Math.random() * leastRecentlySeen.length)];
 }
 
 export const miniGameEngines: MiniGameEngine[] = (['mcq','boolean','odd','order','anagram','missing','clues','wordle'] as const).map(type => ({

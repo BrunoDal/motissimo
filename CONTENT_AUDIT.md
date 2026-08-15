@@ -1,6 +1,6 @@
 # Audit éditorial du contenu français
 
-Dernière révision complète : 14 août 2026.
+Dernière révision complète : 15 août 2026.
 
 ## Méthode
 
@@ -25,6 +25,14 @@ Dernière révision complète : 14 août 2026.
 - Les variantes d’une même fiche partagent désormais un identifiant de source pour garantir l’anti-répétition.
 
 Les questions reposent sur des faits stables et ne dépendent d’aucune donnée en ligne pendant le jeu.
+
+## Diversité des parties
+
+- Les deux langues disposent désormais de plus de 500 sources sémantiques distinctes, contre environ 200 à 300 auparavant.
+- Le catalogue bilingue a été enrichi en géographie mondiale, symboles chimiques, littérature, patrimoine, vocabulaire, intrus, chronologies et mots mystères.
+- Les questions inverses sont formulées comme de vraies questions autonomes : capitale vers pays, symbole vers élément et auteur vers œuvre.
+- La sélection privilégie une source jamais vue, puis la source vue depuis le plus longtemps. L’historique anti-répétition conserve les 600 dernières sources, y compris dans les modes dédiés.
+- Des tests bilingues vérifient le nombre minimal de sources par mini-jeu, les choix distincts et les mots mystères de cinq lettres.
 
 ## Pack polonais
 

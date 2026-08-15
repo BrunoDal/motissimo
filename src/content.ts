@@ -1,5 +1,6 @@
 import * as fr from './data/fr';
 import * as pl from './data/pl';
+import { buildVarietyPack } from './data/variety';
 import type { Challenge, ChoiceChallenge } from './types';
 import type { Language } from './types';
 
@@ -73,11 +74,16 @@ function editionOf(challenge: Challenge, edition: number, locale: string): Chall
 
 export function buildChallenges(language: Language, limit = 10_000): Challenge[] {
   const data = language === 'pl' ? pl : fr;
+  const variety = buildVarietyPack(language);
   const copy = contentCopy[language];
   const locale = language === 'pl' ? 'pl-PL' : 'fr-FR';
   const baseChallenges: Challenge[] = [];
 
-  data.facts.forEach(([question, answer, wrongs, category, difficulty, explanation], index) => {
+  const facts = [...data.facts, ...variety.facts].filter((fact, index, all) => all.findIndex(candidate => candidate[0].toLocaleLowerCase(locale) === fact[0].toLocaleLowerCase(locale)) === index);
+  const words = [...data.words, ...variety.words].filter((word, index, all) => all.findIndex(candidate => candidate[0].toLocaleLowerCase(locale) === word[0].toLocaleLowerCase(locale)) === index);
+  const wordleWords = [...data.wordleWords, ...variety.wordleWords].filter((word, index, all) => all.findIndex(candidate => candidate[0].toLocaleLowerCase(locale) === word[0].toLocaleLowerCase(locale)) === index);
+
+  facts.forEach(([question, answer, wrongs, category, difficulty, explanation], index) => {
     baseChallenges.push(choice(`${language}-fact-${index}-qcm`, 'mcq', category, difficulty, question, answer, wrongs, explanation));
     [answer, wrongs[0], wrongs[1]].forEach((proposal, variant) => {
       const correct = proposal === answer ? copy.true : copy.false;
@@ -88,16 +94,16 @@ export function buildChallenges(language: Language, limit = 10_000): Challenge[]
     });
   });
 
-  data.oddSets.forEach(([category, items, difficulty], index) => {
+  [...data.oddSets, ...variety.oddSets].forEach(([category, items, difficulty], index) => {
     const answer = items[3];
     baseChallenges.push(choice(`${language}-odd-${index}`, 'odd', category, difficulty, copy.oddPrompt(category), answer, items.slice(0, 3), copy.oddExplanation(answer, category)));
   });
 
-  data.timelines.forEach(([prompt, answer, difficulty], index) => {
+  [...data.timelines, ...variety.timelines].forEach(([prompt, answer, difficulty], index) => {
     baseChallenges.push({ id: `${language}-order-${index}`, type: 'order', category: copy.chronology, difficulty, prompt, items: shuffled(answer, `${language}-order-${index}`), answer, explanation: `${copy.correctOrder}: ${answer.join(' → ')}.` });
   });
 
-  data.words.forEach(([word, definition, clue2, clue3, difficulty], index) => {
+  words.forEach(([word, definition, clue2, clue3, difficulty], index) => {
     for (let variant = 0; variant < 2; variant++) {
       baseChallenges.push({ id: `${language}-word-${index}-anagram-${variant}`, type: 'anagram', category: copy.words, difficulty: Math.min(5, difficulty + variant), prompt: copy.anagramPrompt, display: anagram(word, variant, locale), answer: word, explanation: `${word}: ${definition.toLocaleLowerCase(locale)}.` });
     }
@@ -106,7 +112,7 @@ export function buildChallenges(language: Language, limit = 10_000): Challenge[]
     baseChallenges.push({ id: `${language}-word-${index}-clues-1`, type: 'clues', category: copy.vocabulary, difficulty: Math.min(5, difficulty + 1), prompt: copy.cluesPromptAlt, answer: word, clues: [clue3, clue2, definition], explanation: copy.answerWas(word) });
   });
 
-  data.wordleWords.forEach(([word, definition, difficulty], index) => {
+  wordleWords.forEach(([word, definition, difficulty], index) => {
     for (let variant = 0; variant < 3; variant++) {
       baseChallenges.push({
         id: `${language}-wordle-${index}-${variant}`, type: 'wordle', category: copy.mystery, difficulty: Math.min(5, difficulty + variant),

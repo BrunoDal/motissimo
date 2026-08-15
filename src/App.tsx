@@ -93,7 +93,7 @@ export default function App() {
     const level = getLevel(state.successes);
     const onlyType = state.mode === 'mix' ? undefined : state.mode;
     const current = pickChallenge(challengesByLanguage[state.language], level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType);
-    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
+    const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-600), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
     prepareChallenge(current, undefined, state.language); setRun(next);
   }, [finishGame, prepareChallenge]);
 
