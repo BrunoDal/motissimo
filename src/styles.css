@@ -23,6 +23,7 @@ button:focus-visible,input:focus-visible { outline:4px solid #241b52; outline-of
 
 .home { background:radial-gradient(circle at 90% 13%,#ffccdb 0 12%,transparent 12.5%),radial-gradient(circle at -7% 37%,#d8cdfd 0 13%,transparent 13.5%),var(--paper); display:flex; flex-direction:column; }
 .home-top { display:flex; align-items:center; justify-content:space-between; position:relative; z-index:2; }
+.home-tools { display:flex; align-items:center; gap:9px; }.language-switch { height:42px; display:flex; align-items:center; gap:2px; padding:4px; border:2px solid #e2dcef; border-radius:14px; background:#fff; color:#82778f; font-size:12px; font-weight:1000; box-shadow:0 3px 10px #4a355014; }.language-switch span { min-width:31px; height:30px; display:grid; place-items:center; border-radius:9px; }.language-switch span.active { color:white; background:var(--purple); box-shadow:0 2px 0 #4932b7; }
 .brand-mark { width:48px; height:48px; border-radius:17px; color:white; background:linear-gradient(135deg,var(--purple),var(--pink)); display:grid; place-items:center; font-size:26px; font-weight:1000; transform:rotate(-5deg); box-shadow:0 7px 0 #4d35c5; }
 .hero { text-align:center; position:relative; padding:54px 0 35px; }
 .hero h1 { margin:8px 0 4px; font-size:clamp(48px,15vw,70px); letter-spacing:-.065em; line-height:.95; color:#2a2345; }
@@ -75,6 +76,7 @@ button:focus-visible,input:focus-visible { outline:4px solid #241b52; outline-of
 .wordle-help { min-height:19px; color:#675e75; text-align:center; font-size:13px; line-height:1.25; font-weight:800; }
 .virtual-keyboard { width:100%; display:grid; gap:5px; user-select:none; touch-action:manipulation; }
 .alphabet-keyboard { width:calc(100% + 30px); margin-inline:-15px; }
+.keyboard-pl .keyboard-row:last-child .key { height:40px; font-size:14px; }
 .keyboard-row { display:flex; justify-content:center; gap:2px; }
 .key { min-width:0; height:48px; flex:1; border:0; border-radius:10px; padding:0; color:#332c45; background:#e9e5ef; box-shadow:0 3px 0 #c8c1d1; font-size:16px; line-height:1; font-weight:1000; text-transform:uppercase; transition:transform .08s,box-shadow .08s,opacity .15s; }
 .key:active:not(:disabled) { transform:translateY(2px); box-shadow:0 1px 0 #c8c1d1; }.key:disabled { opacity:.28; cursor:not-allowed; }

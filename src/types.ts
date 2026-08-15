@@ -1,5 +1,6 @@
 export type GameType = 'mcq' | 'boolean' | 'odd' | 'order' | 'anagram' | 'missing' | 'clues' | 'wordle';
 export type GameMode = 'mix' | GameType;
+export type Language = 'fr' | 'pl';
 
 export interface BaseChallenge {
   id: string;
@@ -61,6 +62,7 @@ export interface RunState {
   bonusRound: boolean;
   startedAt: number;
   mode: GameMode;
+  language: Language;
   draftText?: string;
   draftOrder?: string[];
   draftGuesses?: string[];
@@ -82,4 +84,5 @@ export interface Preferences {
   reducedMotion: boolean;
   highContrast: boolean;
   gameMode: GameMode;
+  language: Language;
 }

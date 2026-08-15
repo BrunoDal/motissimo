@@ -1,11 +1,11 @@
 import type { Preferences, RunState, Stats } from './types';
 
-const RUN_KEY = 'motissimo-run-v3';
+const RUN_KEY = 'motissimo-run-v4';
 const STATS_KEY = 'motissimo-stats-v1';
 const PREFS_KEY = 'motissimo-prefs-v1';
 
 export const defaultStats: Stats = { bestScore: 0, gamesPlayed: 0, totalCorrect: 0, totalQuestions: 0, longestCombo: 0 };
-export const defaultPreferences: Preferences = { sound: true, vibration: true, reducedMotion: false, highContrast: false, gameMode: 'mix' };
+export const defaultPreferences: Preferences = { sound: true, vibration: true, reducedMotion: false, highContrast: false, gameMode: 'mix', language:'fr' };
 
 function load<T>(key: string, fallback: T): T {
   try {

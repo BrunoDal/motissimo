@@ -5,6 +5,7 @@ export function normalizeText(value: string): string {
     .toLocaleLowerCase('fr-FR')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
     .replace(/[’'\-\s]/g, '')
     .trim();
 }

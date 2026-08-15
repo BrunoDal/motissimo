@@ -13,6 +13,7 @@ describe('moteur Motissimo', () => {
 
   it('normalise les accents, espaces et apostrophes', () => {
     expect(normalizeText(" L’Été-bleu ")).toBe('letebleu');
+    expect(normalizeText('ŁÓDŹ')).toBe('lodz');
   });
 
   it('valide les choix, le texte, l’ordre et le mot mystère', () => {

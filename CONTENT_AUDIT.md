@@ -25,3 +25,7 @@ Dernière révision complète : 14 août 2026.
 - Les variantes d’une même fiche partagent désormais un identifiant de source pour garantir l’anti-répétition.
 
 Les questions reposent sur des faits stables et ne dépendent d’aucune donnée en ligne pendant le jeu.
+
+## Pack polonais
+
+Le pack polonais suit les mêmes contrôles que le pack français : questions et réponses distinctes, difficultés bornées, chronologies ordonnées, vocabulaire unique et mots mystères de cinq lettres après normalisation. Il contient également des fiches propres à la géographie, à l’histoire, à la littérature et à la langue polonaises. Le catalogue génère exactement 10 000 manches polonaises hors ligne et conserve les caractères Ą, Ć, Ę, Ł, Ń, Ó, Ś, Ź et Ż à l’affichage et à la saisie.

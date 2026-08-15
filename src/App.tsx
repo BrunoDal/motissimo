@@ -1,26 +1,17 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { frenchChallenges } from './content';
+import { challengesByLanguage } from './content';
 import { calculatePoints, evaluateWordleGuess, getLevel, getTimeLimit, normalizeText, pickChallenge, validateChallenge } from './engine';
 import { defaultPreferences, defaultStats, loadPreferences, loadRun, loadStats, savePreferences, saveRun, saveStats } from './storage';
-import type { Challenge, GameMode, GameType, Preferences, RunState, Stats } from './types';
+import type { Challenge, GameMode, GameType, Language, Preferences, RunState, Stats } from './types';
 import VirtualKeyboard, { type LetterMark } from './VirtualKeyboard';
+import { ui } from './ui';
 
 type Screen = 'home' | 'game' | 'pause' | 'gameover' | 'rules' | 'settings' | 'modes';
 type Feedback = { correct: boolean; points: number; message: string } | null;
 
-const gameLabels: Record<GameType, string> = {
-  mcq: 'QCM express', boolean: 'Vrai ou faux', odd: 'L’intrus', order: 'Remets dans l’ordre',
-  anagram: 'Anagramme', missing: 'Mot à trous', clues: 'Trois indices', wordle: 'Mot mystère'
-};
-
 const gameIcons: Record<GameType, string> = { mcq:'?', boolean:'✓', odd:'◈', order:'↕', anagram:'A', missing:'…', clues:'3', wordle:'W' };
-const modeDescriptions: Record<GameType, string> = {
-  mcq:'Quatre réponses, une seule juste', boolean:'Décide si l’affirmation est vraie', odd:'Repère l’élément qui ne va pas',
-  order:'Replace les événements dans le temps', anagram:'Remets les lettres dans l’ordre', missing:'Complète les lettres absentes',
-  clues:'Trouve le mot avec trois indices', wordle:'Trouve le mot mystère en six essais'
-};
 
-function formatScore(score: number) { return new Intl.NumberFormat('fr-FR').format(score); }
+function formatScore(score: number, locale = 'fr-FR') { return new Intl.NumberFormat(locale).format(score); }
 
 function playTone(correct: boolean, enabled: boolean) {
   if (!enabled) return;
@@ -56,9 +47,14 @@ export default function App() {
   const [lastScore, setLastScore] = useState(0);
   const runRef = useRef(run);
   const feedbackRef = useRef(feedback);
+  const displayLanguage: Language = run && (screen === 'game' || screen === 'pause') ? run.language : prefs.language;
+  const copy = ui[displayLanguage];
+  const gameLabels = copy.gameLabels;
+  const modeDescriptions = copy.modeDescriptions;
 
   useEffect(() => { runRef.current = run; }, [run]);
   useEffect(() => { feedbackRef.current = feedback; }, [feedback]);
+  useEffect(() => { document.documentElement.lang = displayLanguage; }, [displayLanguage]);
   useEffect(() => { savePreferences(prefs); }, [prefs]);
   useEffect(() => { saveStats(stats); }, [stats]);
   useEffect(() => {
@@ -66,22 +62,23 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [run]);
 
-  const prepareChallenge = useCallback((challenge: Challenge, saved?: RunState) => {
-    const firstLetter = challenge.type === 'wordle' ? normalizeText(challenge.answer)[0] : '';
+  const prepareChallenge = useCallback((challenge: Challenge, saved?: RunState, language:Language = 'fr') => {
+    const locale = ui[language].locale;
+    const firstLetter = challenge.type === 'wordle' ? [...challenge.answer.toLocaleLowerCase(locale)][0] : '';
     setAnswer(saved?.draftText || firstLetter); setWordleGuesses(saved?.draftGuesses ?? []); setWordleError(''); setCluesShown(saved?.draftCluesShown ?? 1); setHintPenalty(saved?.draftHintPenalty ?? 0); setFeedback(null);
     if (challenge.type === 'order') setOrdered(saved?.draftOrder ?? [...challenge.items]); else setOrdered([]);
   }, []);
 
   const startNew = useCallback(() => {
     const onlyType = prefs.gameMode === 'mix' ? undefined : prefs.gameMode;
-    const current = pickChallenge(frenchChallenges, 1, [], undefined, false, onlyType);
-    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.sourceId ?? current.id], bonusRound: false, startedAt: Date.now(), mode:prefs.gameMode };
-    setRun(next); prepareChallenge(current); setScreen('game');
-  }, [prepareChallenge, prefs.gameMode]);
+    const current = pickChallenge(challengesByLanguage[prefs.language], 1, [], undefined, false, onlyType);
+    const next: RunState = { score: 0, lives: 3, combo: 0, successes: 0, attempts: 0, current, remainingMs: getTimeLimit(current, 1), recentIds: [current.sourceId ?? current.id], bonusRound: false, startedAt: Date.now(), mode:prefs.gameMode, language:prefs.language };
+    setRun(next); prepareChallenge(current, undefined, prefs.language); setScreen('game');
+  }, [prepareChallenge, prefs.gameMode, prefs.language]);
 
   const resume = useCallback(() => {
     if (!run) return;
-    prepareChallenge(run.current, run); setScreen('game');
+    prepareChallenge(run.current, run, run.language); setScreen('game');
   }, [run, prepareChallenge]);
 
   const finishGame = useCallback((finalScore: number) => {
@@ -95,9 +92,9 @@ export default function App() {
     const shouldBonus = wasCorrect && state.combo > 0 && state.combo % 25 === 0 && state.lives < 3;
     const level = getLevel(state.successes);
     const onlyType = state.mode === 'mix' ? undefined : state.mode;
-    const current = pickChallenge(frenchChallenges, level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType);
+    const current = pickChallenge(challengesByLanguage[state.language], level, state.recentIds, state.mode === 'mix' ? state.current.type : undefined, shouldBonus, onlyType);
     const next = { ...state, current, bonusRound: shouldBonus, remainingMs: getTimeLimit(current, level), recentIds: [...state.recentIds, current.sourceId ?? current.id].slice(-80), draftText: '', draftOrder: current.type === 'order' ? [...current.items] : [], draftGuesses: [], draftCluesShown: 1, draftHintPenalty: 0 };
-    prepareChallenge(current); setRun(next);
+    prepareChallenge(current, undefined, state.language); setRun(next);
   }, [finishGame, prepareChallenge]);
 
   const resolveAnswer = useCallback((isCorrect: boolean) => {
@@ -112,9 +109,10 @@ export default function App() {
       ...currentRun, score: currentRun.score + points, lives, combo: nextCombo,
       successes: currentRun.successes + (isCorrect ? 1 : 0), attempts: currentRun.attempts + 1, remainingMs: Math.max(0, currentRun.remainingMs)
     };
+    const runCopy = ui[currentRun.language];
     const message = isCorrect
-      ? currentRun.bonusRound && lives > currentRun.lives ? 'Vie récupérée !' : nextCombo > 0 && nextCombo % 5 === 0 ? `Combo ×${Math.min(3, 1 + Math.floor(nextCombo / 5) * .25)} !` : 'Bien joué !'
-      : currentRun.remainingMs <= 0 ? 'Temps écoulé !' : 'Pas cette fois !';
+      ? currentRun.bonusRound && lives > currentRun.lives ? runCopy.lifeBack : nextCombo > 0 && nextCombo % 5 === 0 ? runCopy.combo(Math.min(3, 1 + Math.floor(nextCombo / 5) * .25)) : runCopy.wellDone
+      : currentRun.remainingMs <= 0 ? runCopy.timeUp : runCopy.wrong;
     setFeedback({ correct: isCorrect, points, message });
     playTone(isCorrect, prefs.sound);
     if (prefs.vibration && navigator.vibrate) navigator.vibrate(isCorrect ? 35 : [60, 40, 80]);
@@ -165,19 +163,22 @@ export default function App() {
   const submitWordle = (event?: FormEvent) => {
     event?.preventDefault();
     if (!run || run.current.type !== 'wordle' || feedback) return;
+    const runCopy = ui[run.language];
+    const locale = runCopy.locale;
     const guess = normalizeText(answer);
     const target = normalizeText(run.current.answer);
     if (!/^[a-z]+$/.test(guess) || guess.length !== target.length) {
-      setWordleError(`Entre un mot de ${target.length} lettres.`); return;
+      setWordleError(runCopy.enterWord(target.length)); return;
     }
-    if (guess[0] !== target[0]) { setWordleError(`Le mot doit commencer par ${target[0].toLocaleUpperCase('fr-FR')}.`); return; }
-    if (wordleGuesses.includes(guess)) { setWordleError('Ce mot a déjà été proposé.'); return; }
-    const nextGuesses = [...wordleGuesses, guess];
-    setWordleGuesses(nextGuesses); setAnswer(target[0]);
+    if (guess[0] !== target[0]) { setWordleError(runCopy.mustStart([...run.current.answer.toLocaleUpperCase(locale)][0])); return; }
+    if (wordleGuesses.some(item=>normalizeText(item)===guess)) { setWordleError(runCopy.alreadyUsed); return; }
+    const submitted = answer.toLocaleLowerCase(locale);
+    const nextGuesses = [...wordleGuesses, submitted];
+    setWordleGuesses(nextGuesses); setAnswer([...run.current.answer.toLocaleLowerCase(locale)][0]);
     if (guess === target) resolveAnswer(true);
     else if (nextGuesses.length >= run.current.maxAttempts) resolveAnswer(false);
     else {
-      setWordleError(`${run.current.maxAttempts-nextGuesses.length} essai${run.current.maxAttempts-nextGuesses.length>1?'s':''} restant${run.current.maxAttempts-nextGuesses.length>1?'s':''}.`);
+      setWordleError(runCopy.attemptsLeft(run.current.maxAttempts-nextGuesses.length));
       if (prefs.vibration && navigator.vibrate) navigator.vibrate(18);
     }
   };
@@ -186,19 +187,21 @@ export default function App() {
     if (!run || feedback) return;
     const challenge = run.current;
     if (challenge.type !== 'anagram' && challenge.type !== 'missing' && challenge.type !== 'clues' && challenge.type !== 'wordle') return;
-    const letter = normalizeText(rawLetter).slice(0, 1);
-    if (!letter) return;
+    const locale = ui[run.language].locale;
+    const letter = rawLetter.toLocaleLowerCase(locale);
+    const normalizedLetter = normalizeText(letter).slice(0, 1);
+    if (!normalizedLetter) return;
     const maxLength = normalizeText(challenge.answer).length;
     setAnswer(current => {
       const normalized = normalizeText(current);
-      if (normalized.length >= maxLength) return normalized;
+      if (normalized.length >= maxLength) return current;
       if (challenge.type === 'anagram') {
         const available = normalizeText(challenge.display ?? challenge.answer);
-        const usedCount = [...normalized].filter(item => item === letter).length;
-        const availableCount = [...available].filter(item => item === letter).length;
-        if (usedCount >= availableCount) return normalized;
+        const usedCount = [...normalized].filter(item => item === normalizedLetter).length;
+        const availableCount = [...available].filter(item => item === normalizedLetter).length;
+        if (usedCount >= availableCount) return current;
       }
-      return normalized + letter;
+      return current + letter;
     });
     setWordleError('');
   }, [run?.current, feedback]);
@@ -206,7 +209,7 @@ export default function App() {
   const eraseLetter = useCallback(() => {
     if (!run || feedback) return;
     const protectedLength = run.current.type === 'wordle' ? 1 : 0;
-    setAnswer(current => normalizeText(current).slice(0, Math.max(protectedLength, normalizeText(current).length - 1)));
+    setAnswer(current => [...current].slice(0, Math.max(protectedLength, [...current].length - 1)).join(''));
     setWordleError('');
   }, [run?.current, feedback]);
 
@@ -226,7 +229,7 @@ export default function App() {
   const progress = run ? Math.max(0, Math.min(100, run.remainingMs / totalTime * 100)) : 0;
   const record = Math.max(stats.bestScore, run?.score ?? 0);
   const accuracy = stats.totalQuestions ? Math.round(stats.totalCorrect / stats.totalQuestions * 100) : 0;
-  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : ''].join(' ');
+  const appClass = [prefs.reducedMotion ? 'reduced-motion' : '', prefs.highContrast ? 'high-contrast' : '', `lang-${displayLanguage}`].join(' ');
 
   const gameCard = useMemo(() => {
     if (!run) return null;
@@ -235,70 +238,70 @@ export default function App() {
       return <div className="choices">{challenge.choices.map((item, index) => <button className="choice" key={item} onClick={() => selectChoice(index)} disabled={!!feedback}><span>{String.fromCharCode(65 + index)}</span>{item}</button>)}</div>;
     }
     if (challenge.type === 'order') {
-      return <><p className="microcopy">Du plus ancien au plus récent</p><div className="order-list">{ordered.map((item, index) => <div className="order-item" key={item}><b>{index + 1}</b><span>{item}</span><div><button aria-label={`Monter ${item}`} disabled={index === 0 || !!feedback} onClick={() => setOrdered(list => { const copy=[...list]; [copy[index-1],copy[index]]=[copy[index],copy[index-1]]; return copy; })}>↑</button><button aria-label={`Descendre ${item}`} disabled={index === ordered.length-1 || !!feedback} onClick={() => setOrdered(list => { const copy=[...list]; [copy[index+1],copy[index]]=[copy[index],copy[index+1]]; return copy; })}>↓</button></div></div>)}</div><button className="primary full" onClick={() => submit()} disabled={!!feedback}>Valider l’ordre</button></>;
+      return <><p className="microcopy">{copy.oldestFirst}</p><div className="order-list">{ordered.map((item, index) => <div className="order-item" key={item}><b>{index + 1}</b><span>{item}</span><div><button aria-label={`↑ ${item}`} disabled={index === 0 || !!feedback} onClick={() => setOrdered(list => { const items=[...list]; [items[index-1],items[index]]=[items[index],items[index-1]]; return items; })}>↑</button><button aria-label={`↓ ${item}`} disabled={index === ordered.length-1 || !!feedback} onClick={() => setOrdered(list => { const items=[...list]; [items[index+1],items[index]]=[items[index],items[index+1]]; return items; })}>↓</button></div></div>)}</div><button className="primary full" onClick={() => submit()} disabled={!!feedback}>{copy.validateOrder}</button></>;
     }
     if (challenge.type === 'wordle') {
       const targetLength = normalizeText(challenge.answer).length;
-      const firstLetter = normalizeText(challenge.answer)[0].toLocaleUpperCase('fr-FR');
+      const firstLetter = [...challenge.answer.toLocaleUpperCase(copy.locale)][0];
       const markPriority: Record<LetterMark, number> = { absent:1, present:2, correct:3 };
       const keyboardMarks = wordleGuesses.reduce<Record<string, LetterMark>>((result, guess) => {
         evaluateWordleGuess(guess, challenge.answer).forEach((mark, index) => {
-          const letter = guess[index]?.toLocaleUpperCase('fr-FR');
+          const letter = [...guess.toLocaleUpperCase(copy.locale)][index];
           if (letter && (!result[letter] || markPriority[mark] > markPriority[result[letter]])) result[letter] = mark;
         });
         return result;
       }, { [firstLetter]:'correct' });
       return <form className="wordle-game" onSubmit={submitWordle}>
-        <div className="wordle-first-letter"><span>{firstLetter}</span> Première lettre offerte</div>
-        <div className="wordle-board" aria-label={`${wordleGuesses.length} essai${wordleGuesses.length>1?'s':''} sur ${challenge.maxAttempts}`}>
+        <div className="wordle-first-letter"><span>{firstLetter}</span> {copy.firstLetter}</div>
+        <div className="wordle-board" aria-label={copy.attempts(wordleGuesses.length,challenge.maxAttempts)}>
           {Array.from({length:challenge.maxAttempts},(_,rowIndex)=>{
             const completed = wordleGuesses[rowIndex];
-            const displayed = completed ?? (rowIndex===wordleGuesses.length ? normalizeText(answer) : '');
+            const displayed = completed ?? (rowIndex===wordleGuesses.length ? answer : '');
             const marks = completed ? evaluateWordleGuess(completed, challenge.answer) : [];
             const active = rowIndex === wordleGuesses.length;
-            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=>{const given=!completed&&letterIndex===0;const letter=displayed[letterIndex]?.toLocaleUpperCase('fr-FR')??(given?firstLetter:'');return <span className={`wordle-tile ${marks[letterIndex]??(given?'given':displayed[letterIndex]?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{letter}</span>;})}</div>;
+            return <div className={`wordle-row ${completed?'revealed':''} ${active?'active':''}`} key={rowIndex}>{Array.from({length:targetLength},(_,letterIndex)=>{const given=!completed&&letterIndex===0;const letter=[...displayed.toLocaleUpperCase(copy.locale)][letterIndex]??(given?firstLetter:'');return <span className={`wordle-tile ${marks[letterIndex]??(given?'given':letter?'filled':'')}`} style={{animationDelay:`${letterIndex*70}ms`}} key={letterIndex}>{letter}</span>;})}</div>;
           })}
         </div>
-        <div className="wordle-help" aria-live="polite">{wordleError||'Vert : bien placée · Jaune : présente'}</div>
-        <VirtualKeyboard value={normalizeText(answer)} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submitWordle()} canSubmit={normalizeText(answer).length===targetLength} disabled={!!feedback} marks={keyboardMarks}/>
+        <div className="wordle-help" aria-live="polite">{wordleError||copy.wordleHelp}</div>
+        <VirtualKeyboard language={run.language} value={answer} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submitWordle()} canSubmit={normalizeText(answer).length===targetLength} disabled={!!feedback} marks={keyboardMarks}/>
       </form>;
     }
-    const bankLetters = challenge.type === 'anagram' ? [...normalizeText(challenge.display ?? challenge.answer).toLocaleUpperCase('fr-FR')] : undefined;
-    return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>+ Voir un indice <small>−35 pts</small></button>}</div>}<div className={`answer-display ${answer?'':'empty'}`} role="textbox" aria-label="Ta réponse" aria-live="polite">{answer ? normalizeText(answer).toLocaleUpperCase('fr-FR') : 'TA RÉPONSE'}</div><VirtualKeyboard value={normalizeText(answer)} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submit()} canSubmit={!!answer.trim()} disabled={!!feedback} letters={bankLetters}/></form>;
+    const bankLetters = challenge.type === 'anagram' ? [...(challenge.display ?? challenge.answer).toLocaleUpperCase(copy.locale)] : undefined;
+    return <form className="text-game" onSubmit={submit}>{(challenge.type === 'anagram' || challenge.type === 'missing') && <div className="word-display">{challenge.display}</div>}{challenge.type === 'clues' && <div className="clues">{challenge.clues.slice(0,cluesShown).map((clue,index)=><div key={clue}><span>{index+1}</span>{clue}</div>)}{cluesShown < 3 && <button type="button" className="hint" onClick={()=>{setCluesShown(n=>n+1);setHintPenalty(n=>n+35);}}>{copy.showHint} <small>{copy.hintCost}</small></button>}</div>}<div className={`answer-display ${answer?'':'empty'}`} role="textbox" aria-label={copy.yourAnswer} aria-live="polite">{answer ? answer.toLocaleUpperCase(copy.locale) : copy.yourAnswer}</div><VirtualKeyboard language={run.language} value={answer} onLetter={appendLetter} onBackspace={eraseLetter} onEnter={()=>submit()} canSubmit={!!answer.trim()} disabled={!!feedback} letters={bankLetters}/></form>;
   // Dependencies intentionally include transient answer state used by all game renderers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.current, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, appendLetter, eraseLetter]);
+  }, [run?.current, run?.language, ordered, wordleGuesses, wordleError, answer, cluesShown, feedback, appendLetter, eraseLetter, copy]);
 
   return <div className={`app ${appClass}`}>
     {screen === 'home' && <main className="home screen">
-      <div className="home-top"><div className="brand-mark">M</div><button className="icon-button" onClick={()=>setScreen('settings')} aria-label="Réglages">⚙</button></div>
-      <section className="hero"><span className="eyebrow">QUIZ · MOTS · RECORDS</span><h1>Motissimo</h1><p>Joue avec ta tête.<br/>Va toujours plus loin.</p><div className="hero-orbit orbit-one">?</div><div className="hero-orbit orbit-two">A</div></section>
+      <div className="home-top"><div className="brand-mark">M</div><div className="home-tools"><button className="language-switch" onClick={()=>setPrefs(p=>({...p,language:p.language==='fr'?'pl':'fr'}))} aria-label={prefs.language==='fr'?'Przełącz na polski':'Passer en français'}><span className={prefs.language==='fr'?'active':''}>FR</span><span className={prefs.language==='pl'?'active':''}>PL</span></button><button className="icon-button" onClick={()=>setScreen('settings')} aria-label={copy.settings}>⚙</button></div></div>
+      <section className="hero"><span className="eyebrow">{copy.heroTag}</span><h1>Motissimo</h1><p>{copy.heroLine1}<br/>{copy.heroLine2}</p><div className="hero-orbit orbit-one">?</div><div className="hero-orbit orbit-two">A</div></section>
       <section className="home-actions">
-        <button className="mode-picker" onClick={()=>setScreen('modes')}><span>{prefs.gameMode==='mix'?'✦':gameIcons[prefs.gameMode]}</span><div><small>MODE DE JEU</small><b>{prefs.gameMode==='mix'?'Mix infini':gameLabels[prefs.gameMode]}</b></div><i>Changer ›</i></button>
-        {run ? <><button className="primary huge" onClick={resume}>▶ Reprendre <small>{formatScore(run.score)} pts · {run.lives} vie{run.lives>1?'s':''}</small></button><button className="secondary" onClick={startNew}>Nouvelle partie</button></> : <button className="primary huge" onClick={startNew}>▶ Jouer <small>3 vies · défi sans fin</small></button>}
+        <button className="mode-picker" onClick={()=>setScreen('modes')}><span>{prefs.gameMode==='mix'?'✦':gameIcons[prefs.gameMode]}</span><div><small>{copy.gameMode}</small><b>{prefs.gameMode==='mix'?copy.mix:gameLabels[prefs.gameMode]}</b></div><i>{copy.change}</i></button>
+        {run ? <><button className="primary huge" onClick={resume}>{copy.resume} <small>{copy.pointsLives(formatScore(run.score,copy.locale),run.lives)}</small></button><button className="secondary" onClick={startNew}>{copy.newGame}</button></> : <button className="primary huge" onClick={startNew}>{copy.play} <small>{copy.livesChallenge}</small></button>}
       </section>
-      <section className="stats-grid"><div><span>🏆</span><b>{formatScore(record)}</b><small>Meilleur score</small></div><div><span>🔥</span><b>{stats.longestCombo}</b><small>Meilleur combo</small></div><div><span>🎯</span><b>{accuracy}%</b><small>Précision</small></div></section>
-      <button className="text-button" onClick={()=>setScreen('rules')}>Comment jouer ?</button>
+      <section className="stats-grid"><div><span>🏆</span><b>{formatScore(record,copy.locale)}</b><small>{copy.bestScore}</small></div><div><span>🔥</span><b>{stats.longestCombo}</b><small>{copy.bestCombo}</small></div><div><span>🎯</span><b>{accuracy}%</b><small>{copy.accuracy}</small></div></section>
+      <button className="text-button" onClick={()=>setScreen('rules')}>{copy.howTo}</button>
     </main>}
 
     {screen === 'game' && run && <main className={`game screen ${['anagram','missing','clues','wordle'].includes(run.current.type)?'virtual-input-game':''} ${feedback?.correct?'answer-correct':feedback?'answer-wrong':''}`}>
       <div className="game-atmosphere" aria-hidden="true"><i/><i/><i/><i/><i/></div>
-      <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label="Mettre en pause">Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>SCORE</small><strong>{formatScore(run.score)}</strong></div><div className="lives" aria-label={`${run.lives} vies`}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
+      <header className="game-header"><button className="icon-button light" onClick={()=>setScreen('pause')} aria-label={copy.pause}>Ⅱ</button><div className={`score ${feedback?.correct?'score-pop':''}`}><small>{copy.score}</small><strong>{formatScore(run.score,copy.locale)}</strong></div><div className="lives" aria-label={copy.lives(run.lives)}>{[0,1,2].map(i=><span key={i} className={`${i<run.lives?'alive':''} ${feedback && !feedback.correct && i===run.lives?'just-lost':''} ${feedback?.correct && run.bonusRound && i===run.lives-1?'just-gained':''}`}>♥</span>)}</div></header>
       <div className="timer-track"><div style={{width:`${progress}%`}} className={progress<25?'danger':''}/></div>
-      <section className="game-meta"><span>Niveau {level}</span><b>{run.bonusRound?'★ Défi vie bonus':gameLabels[run.current.type]}</b><span className={run.combo>0?'combo-live':''}>🔥 {run.combo}</span></section>
-      <section className={`challenge-card challenge-${run.current.type}`} data-game-type={run.current.type} key={run.current.id}><span className="category">{run.current.category} · difficulté {run.current.difficulty}/5</span><h2>{run.current.prompt}</h2><div className="challenge-body">{gameCard}</div></section>
-      <footer className="game-footer"><span>Record {formatScore(record)}</span><span>{Math.ceil(run.remainingMs/1000)} s</span></footer>
-      {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status" aria-live="assertive"><div className="feedback-symbol">{feedback.correct?'✓':'×'}</div>{!feedback.correct && <div className="life-loss"><span>♥</span><b>−1 VIE</b><i/><i/><i/></div>}<h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points)} points</strong>:<p>{run.current.explanation}</p>}</div>}
+      <section className="game-meta"><span>{copy.level(level)}</span><b>{run.bonusRound?copy.bonus:gameLabels[run.current.type]}</b><span className={run.combo>0?'combo-live':''}>🔥 {run.combo}</span></section>
+      <section className={`challenge-card challenge-${run.current.type}`} data-game-type={run.current.type} key={run.current.id}><span className="category">{run.current.category} · {copy.difficulty(run.current.difficulty)}</span><h2>{run.current.prompt}</h2><div className="challenge-body">{gameCard}</div></section>
+      <footer className="game-footer"><span>{copy.record} {formatScore(record,copy.locale)}</span><span>{Math.ceil(run.remainingMs/1000)} s</span></footer>
+      {feedback && <div className={`feedback ${feedback.correct?'correct':'wrong'}`} role="status" aria-live="assertive"><div className="feedback-symbol">{feedback.correct?'✓':'×'}</div>{!feedback.correct && <div className="life-loss"><span>♥</span><b>{copy.lifeLost}</b><i/><i/><i/></div>}<h3>{feedback.message}</h3>{feedback.correct?<strong>+{formatScore(feedback.points,copy.locale)} {copy.points}</strong>:<p>{run.current.explanation}</p>}</div>}
     </main>}
 
-    {screen === 'pause' && run && <main className="modal-screen screen"><div className="modal-icon">Ⅱ</div><h1>En pause</h1><p>Ton chrono est arrêté.<br/>Ta partie est sauvegardée.</p><button className="primary huge" onClick={resume}>Continuer</button><button className="secondary" onClick={()=>setScreen('home')}>Retour à l’accueil</button></main>}
+    {screen === 'pause' && run && <main className="modal-screen screen"><div className="modal-icon">Ⅱ</div><h1>{copy.paused}</h1><p>{copy.pausedText.split('\n').map((line,index)=><span key={line}>{index>0&&<br/>}{line}</span>)}</p><button className="primary huge" onClick={resume}>{copy.continue}</button><button className="secondary" onClick={()=>setScreen('home')}>{copy.home}</button></main>}
 
-    {screen === 'gameover' && <main className="modal-screen gameover screen"><div className="modal-icon">🏁</div><span className="eyebrow">PARTIE TERMINÉE</span><h1>{formatScore(lastScore)}</h1><p>points</p>{lastScore >= stats.bestScore && lastScore > 0 && <div className="new-record">✨ Nouveau record !</div>}<button className="primary huge" onClick={startNew}>Rejouer</button><button className="secondary" onClick={()=>setScreen('home')}>Retour à l’accueil</button></main>}
+    {screen === 'gameover' && <main className="modal-screen gameover screen"><div className="modal-icon">🏁</div><span className="eyebrow">{copy.gameOver}</span><h1>{formatScore(lastScore,copy.locale)}</h1><p>{copy.points}</p>{lastScore >= stats.bestScore && lastScore > 0 && <div className="new-record">{copy.newRecord}</div>}<button className="primary huge" onClick={startNew}>{copy.replay}</button><button className="secondary" onClick={()=>setScreen('home')}>{copy.home}</button></main>}
 
-    {screen === 'rules' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>Comment jouer ?</h1></header><div className="rule"><b>1</b><div><h2>Enchaîne les défis</h2><p>Huit mini-jeux alternent culture générale et jeux de mots.</p></div></div><div className="rule"><b>2</b><div><h2>Protège tes vies</h2><p>Tu commences avec trois cœurs. Une erreur ou un chrono écoulé en coûte un.</p></div></div><div className="rule"><b>3</b><div><h2>Fais monter le combo</h2><p>Les séries de bonnes réponses multiplient tes points jusqu’à ×3.</p></div></div><div className="rule"><b>4</b><div><h2>Décroche une vie bonus</h2><p>Après 25 bonnes réponses consécutives, réussis le défi bonus pour récupérer un cœur.</p></div></div><div className="offline-note">☁︎ <strong>100 % hors ligne</strong><br/><span>Après la première visite, Motissimo fonctionne sans connexion.</span></div></main>}
+    {screen === 'rules' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>{copy.rulesTitle}</h1></header><div className="rule"><b>1</b><div><h2>{copy.rule1Title}</h2><p>{copy.rule1Text}</p></div></div><div className="rule"><b>2</b><div><h2>{copy.rule2Title}</h2><p>{copy.rule2Text}</p></div></div><div className="rule"><b>3</b><div><h2>{copy.rule3Title}</h2><p>{copy.rule3Text}</p></div></div><div className="rule"><b>4</b><div><h2>{copy.rule4Title}</h2><p>{copy.rule4Text}</p></div></div><div className="offline-note">☁︎ <strong>{copy.offline}</strong><br/><span>{copy.offlineText}</span></div></main>}
 
-    {screen === 'settings' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>Réglages</h1></header><SettingsRow icon="♪" title="Sons" detail="Effets de réussite et d’erreur" checked={prefs.sound} onChange={sound=>setPrefs(p=>({...p,sound}))}/><SettingsRow icon="⌁" title="Vibrations" detail="Retour tactile pendant la partie" checked={prefs.vibration} onChange={vibration=>setPrefs(p=>({...p,vibration}))}/><SettingsRow icon="◌" title="Réduire les animations" detail="Limite les mouvements visuels" checked={prefs.reducedMotion} onChange={reducedMotion=>setPrefs(p=>({...p,reducedMotion}))}/><SettingsRow icon="◐" title="Contraste renforcé" detail="Améliore la distinction des éléments" checked={prefs.highContrast} onChange={highContrast=>setPrefs(p=>({...p,highContrast}))}/><div className="offline-note">Les réglages, statistiques et records restent uniquement sur cet appareil.</div></main>}
-    {screen === 'modes' && <main className="info-screen modes-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><div><span className="eyebrow">TA PARTIE, TES RÈGLES</span><h1>Choisis ton mode</h1></div></header><button className={`mode-card mix-mode ${prefs.gameMode==='mix'?'selected':''}`} onClick={()=>{setPrefs(p=>({...p,gameMode:'mix'}));setScreen('home');}}><span>✦</span><div><b>Mix infini</b><small>Les huit mini-jeux s’enchaînent</small></div><i>{prefs.gameMode==='mix'?'✓':'›'}</i></button><div className="mode-list">{(Object.keys(gameLabels) as GameType[]).map(type=><button className={`mode-card ${prefs.gameMode===type?'selected':''}`} key={type} onClick={()=>{setPrefs(p=>({...p,gameMode:type as GameMode}));setScreen('home');}}><span>{gameIcons[type]}</span><div><b>{gameLabels[type]}</b><small>{modeDescriptions[type]}</small></div><i>{prefs.gameMode===type?'✓':'›'}</i></button>)}</div></main>}
+    {screen === 'settings' && <main className="info-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><h1>{copy.settings}</h1></header><SettingsRow icon="♪" title={copy.sound} detail={copy.soundText} checked={prefs.sound} onChange={sound=>setPrefs(p=>({...p,sound}))}/><SettingsRow icon="⌁" title={copy.vibrations} detail={copy.vibrationsText} checked={prefs.vibration} onChange={vibration=>setPrefs(p=>({...p,vibration}))}/><SettingsRow icon="◌" title={copy.reduceMotion} detail={copy.reduceMotionText} checked={prefs.reducedMotion} onChange={reducedMotion=>setPrefs(p=>({...p,reducedMotion}))}/><SettingsRow icon="◐" title={copy.contrast} detail={copy.contrastText} checked={prefs.highContrast} onChange={highContrast=>setPrefs(p=>({...p,highContrast}))}/><div className="offline-note">{copy.localData}</div></main>}
+    {screen === 'modes' && <main className="info-screen modes-screen screen"><header><button className="icon-button" onClick={()=>setScreen('home')}>←</button><div><span className="eyebrow">{copy.chooseModeTag}</span><h1>{copy.chooseMode}</h1></div></header><button className={`mode-card mix-mode ${prefs.gameMode==='mix'?'selected':''}`} onClick={()=>{setPrefs(p=>({...p,gameMode:'mix'}));setScreen('home');}}><span>✦</span><div><b>{copy.mix}</b><small>{copy.mixDescription}</small></div><i>{prefs.gameMode==='mix'?'✓':'›'}</i></button><div className="mode-list">{(Object.keys(gameLabels) as GameType[]).map(type=><button className={`mode-card ${prefs.gameMode===type?'selected':''}`} key={type} onClick={()=>{setPrefs(p=>({...p,gameMode:type as GameMode}));setScreen('home');}}><span>{gameIcons[type]}</span><div><b>{gameLabels[type]}</b><small>{modeDescriptions[type]}</small></div><i>{prefs.gameMode===type?'✓':'›'}</i></button>)}</div></main>}
   </div>;
 }
 
