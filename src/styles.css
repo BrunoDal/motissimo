@@ -74,8 +74,8 @@ button:focus-visible,input:focus-visible { outline:4px solid #241b52; outline-of
 .wordle-first-letter { display:flex; align-items:center; justify-content:center; gap:8px; color:#5e5373; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }.wordle-first-letter span { width:29px; height:29px; display:grid; place-items:center; border-radius:9px; color:white; background:var(--purple); box-shadow:0 3px 0 #4631b3; font-size:17px; }
 .wordle-help { min-height:19px; color:#675e75; text-align:center; font-size:13px; line-height:1.25; font-weight:800; }
 .virtual-keyboard { width:100%; display:grid; gap:5px; user-select:none; touch-action:manipulation; }
-.alphabet-keyboard { width:calc(100% + 20px); margin-inline:-10px; }
-.keyboard-row { display:flex; justify-content:center; gap:4px; }
+.alphabet-keyboard { width:calc(100% + 30px); margin-inline:-15px; }
+.keyboard-row { display:flex; justify-content:center; gap:2px; }
 .key { min-width:0; height:48px; flex:1; border:0; border-radius:10px; padding:0; color:#332c45; background:#e9e5ef; box-shadow:0 3px 0 #c8c1d1; font-size:16px; line-height:1; font-weight:1000; text-transform:uppercase; transition:transform .08s,box-shadow .08s,opacity .15s; }
 .key:active:not(:disabled) { transform:translateY(2px); box-shadow:0 1px 0 #c8c1d1; }.key:disabled { opacity:.28; cursor:not-allowed; }
 .action-key { flex:1.55; color:var(--purple); background:#ded6ff; box-shadow:0 3px 0 #b8a9f1; font-size:21px; }.enter-symbol { color:white; background:var(--purple); box-shadow:0 3px 0 #4c35bf; }
